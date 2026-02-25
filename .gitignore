@@ -21,3 +21,5 @@ resources/ffmpeg*
 scripts/output.txt
 scripts/input.txt
 **/bin/
+coverage/
+wasm-core/pkg/
