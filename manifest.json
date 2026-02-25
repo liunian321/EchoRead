@@ -1,0 +1,33 @@
+{
+    "manifest_version": 3,
+    "name": "EchoRead Translator",
+    "version": "1.0.0",
+    "description": "高性能网页翻译与阅读辅助插件",
+    "permissions": [
+        "storage",
+        "activeTab",
+        "scripting"
+    ],
+    "host_permissions": [
+        "<all_urls>"
+    ],
+    "action": {
+        "default_title": "EchoRead",
+        "default_popup": "src/popup/index.html"
+    },
+    "background": {
+        "service_worker": "src/background/index.ts",
+        "type": "module"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "src/content/index.tsx"
+            ],
+            "run_at": "document_idle"
+        }
+    ]
+}
