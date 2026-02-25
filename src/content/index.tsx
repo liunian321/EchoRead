@@ -1,77 +1,53 @@
 import { h, render } from "preact";
+import { App } from "./App";
 
 /**
- * 这是 Content Script 的入口. 核心要点：
- * 1. 使用 Shadow DOM 隔离组件样式
- * 2. 只有划词高频交互在本文档进行
+ * Entry point for Content Script.
+ * Encapsulates the App in Shadow DOM.
  */
 
-// 1. 设置 Shadow DOM 宿主并挂载
 const ECHO_READ_ROOT_ID = "echoread-extension-root";
 
-function initShadowRoot() {
-  let root = document.getElementById(ECHO_READ_ROOT_ID);
-  if (!root) {
-    root = document.createElement("div");
-    root.id = ECHO_READ_ROOT_ID;
-    document.documentElement.appendChild(root);
-  }
+function init() {
+  // Check if already exists (e.g. re-injection)
+  if (document.getElementById(ECHO_READ_ROOT_ID)) return;
 
-  const shadow = root.attachShadow({ mode: "closed" });
+  const root = document.createElement("div");
+  root.id = ECHO_READ_ROOT_ID;
+
+  // Ensure the container doesn't affect page layout
+  Object.assign(root.style, {
+    position: "absolute",
+    top: "0",
+    left: "0",
+    width: "0",
+    height: "0",
+    zIndex: "2147483647",
+    pointerEvents: "none" // Let events pass through the container
+  });
+
+  document.documentElement.appendChild(root);
+
+  // Create Shadow DOM
+  const shadow = root.attachShadow({ mode: "open" });
+
+  // Create mount point inside Shadow DOM
   const mountPoint = document.createElement("div");
+
+  // Reset styles for the mount point to ensure consistent rendering
+  mountPoint.style.all = "initial";
+  // Re-enable pointer events for the app container
+  mountPoint.style.pointerEvents = "auto";
+  mountPoint.style.fontFamily = "system-ui, -apple-system, sans-serif";
+
   shadow.appendChild(mountPoint);
 
-  return mountPoint;
+  render(<App />, mountPoint);
 }
 
-// 模拟的划词弹出 UI
-function QuickTranslateBubble({ selectionText }: { selectionText: string }) {
-  return (
-    <div
-      style={{
-        position: "fixed",
-        top: "10px",
-        right: "10px",
-        padding: "12px 16px",
-        background: "rgba(30, 30, 30, 0.8)",
-        backdropFilter: "blur(10px)",
-        color: "white",
-        borderRadius: "8px",
-        zIndex: 2147483647,
-        fontFamily: "system-ui",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-        fontSize: "14px",
-      }}
-    >
-      正在检测划词翻译: {selectionText.slice(0, 10)}...
-    </div>
-  );
+// Initialize
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", init);
+} else {
+  init();
 }
-
-const mountNode = initShadowRoot();
-let currentSelection = "";
-
-document.addEventListener("selectionchange", () => {
-  // 用 requestAnimationFrame 防抖或批量处理 UI 避免重绘卡顿
-  requestAnimationFrame(() => {
-    const text = window.getSelection()?.toString().trim() || "";
-    if (text && text !== currentSelection) {
-      currentSelection = text;
-      render(<QuickTranslateBubble selectionText={text} />, mountNode);
-
-      // 可以通过 sendMessage 传给 SW 进行翻译
-      chrome.runtime.sendMessage(
-        {
-          type: "TRANSLATE_TEXT",
-          payload: { text },
-        },
-        (response) => {
-          console.log("Background 回复:", response);
-        },
-      );
-    } else if (!text && currentSelection) {
-      currentSelection = "";
-      render(null, mountNode); // 清除组件
-    }
-  });
-});
