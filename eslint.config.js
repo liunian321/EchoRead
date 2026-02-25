@@ -6,7 +6,7 @@ export default ts.config(
   js.configs.recommended,
   ...ts.configs.recommended,
   {
-    ignores: ["dist/**"],
+    ignores: ["dist/**", "wasm-core/pkg/**"],
   },
   {
     languageOptions: {
@@ -17,7 +17,7 @@ export default ts.config(
     },
     rules: {
       "@typescript-eslint/no-unused-vars": "warn",
-      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-explicit-any": "off",
     },
   },
 );

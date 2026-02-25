@@ -1,5 +1,5 @@
 import { useState, useCallback } from "preact/hooks";
-import { translateText } from "../services/api";
+import { streamTranslateText } from "../services/api";
 import { TranslationResult } from "../types";
 
 export interface UseTranslateReturn {
@@ -23,12 +23,18 @@ export function useTranslate(): UseTranslateReturn {
     setData(null);
 
     try {
-      const result = await translateText(text);
-      setData(result);
-    } catch (err: any) {
+      // Use streaming translation instead of single request
+      await streamTranslateText(text, (incrementalData) => {
+        setData(incrementalData);
+        setIsLoading(false); // Stop loading animation once first chunk arrives
+      });
+    } catch (err: unknown) {
       console.error("Translation error:", err);
-      setError(err.message || "Translation failed. Please try again.");
-    } finally {
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Translation failed. Please try again.";
+      setError(errorMessage);
       setIsLoading(false);
     }
   }, []);

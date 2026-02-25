@@ -1,4 +1,4 @@
-import { h, render } from "preact";
+import { render } from "preact";
 import { App } from "./App";
 
 /**
@@ -23,7 +23,7 @@ function init() {
     width: "0",
     height: "0",
     zIndex: "2147483647",
-    pointerEvents: "none" // Let events pass through the container
+    pointerEvents: "none", // Let events pass through the container
   });
 
   document.documentElement.appendChild(root);

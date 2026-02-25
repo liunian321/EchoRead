@@ -1,26 +1,52 @@
-import { TranslateResponse, TranslationResult } from "../types";
+import { TranslationResult } from "../types";
 
 /**
- * Sends a translation request to the background script.
+ * Sends a streaming translation request to the background script using connection ports.
  * @param text The text to translate.
- * @returns A promise resolving to the translation result.
+ * @param onProgress Callback passing the incremental translation result.
+ * @returns A promise resolving to the final complete translation result.
  */
-export function translateText(text: string): Promise<TranslationResult> {
+export function streamTranslateText(
+  text: string,
+  onProgress: (data: TranslationResult) => void,
+): Promise<TranslationResult> {
   return new Promise((resolve, reject) => {
+    let finalData: TranslationResult | null = null;
+    let settled = false;
     try {
-      chrome.runtime.sendMessage(
-        { type: "TRANSLATE_TEXT", payload: { text } },
-        (response: TranslateResponse) => {
-          if (chrome.runtime.lastError) {
-            return reject(new Error(chrome.runtime.lastError.message));
-          }
-          if (response && response.success && response.data) {
-            resolve(response.data);
+      const port = chrome.runtime.connect({ name: "translate-stream" });
+
+      port.onMessage.addListener((msg) => {
+        if (msg.type === "STREAM_DATA") {
+          finalData = msg.data;
+          onProgress(msg.data);
+        } else if (msg.type === "STREAM_END") {
+          settled = true;
+          if (finalData) {
+            resolve(finalData);
           } else {
-            reject(new Error(response?.error || "Translation failed"));
+            reject(new Error("Translation returned empty result"));
           }
+        } else if (msg.type === "ERROR") {
+          settled = true;
+          reject(new Error(msg.error));
         }
-      );
+      });
+
+      port.onDisconnect.addListener(() => {
+        if (settled) return;
+        settled = true;
+        if (chrome.runtime.lastError) {
+          reject(new Error(chrome.runtime.lastError.message));
+        } else if (finalData) {
+          // background 正常 disconnect 但未发 STREAM_END，用已有数据 resolve
+          resolve(finalData);
+        } else {
+          reject(new Error("Connection closed without result"));
+        }
+      });
+
+      port.postMessage({ type: "TRANSLATE_TEXT", payload: { text } });
     } catch (e) {
       reject(e);
     }

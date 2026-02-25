@@ -23,3 +23,12 @@ export interface TranslateResponse {
   data?: TranslationResult;
   error?: string;
 }
+
+export interface StorageConfig {
+  floatingButtonEnabled?: boolean;
+  floatingButtonOpacity?: number | string;
+  floatingButtonSize?: number | string;
+  floatingButtonIconStyle?: "solid" | "outline";
+  selectionTranslate?: boolean;
+  floatingButtonPosition?: { x: number; y: number };
+}

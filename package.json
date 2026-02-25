@@ -6,10 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest"
   },
   "dependencies": {
-    "preact": "^10.28.4"
+    "preact": "^10.28.4",
+    "wasm-core": "link:wasm-core\\pkg"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.3.0",
@@ -24,7 +29,11 @@
     "globals": "^17.3.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1",
+    "vitest": "^3.2.4",
+    "@vitest/coverage-v8": "^3.2.4",
     "vite": "^7.3.1",
-    "vite-plugin-dts": "^4.5.4"
+    "vite-plugin-dts": "^4.5.4",
+    "vite-plugin-top-level-await": "^1.6.0",
+    "vite-plugin-wasm": "^3.5.0"
   }
 }
