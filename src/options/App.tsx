@@ -82,8 +82,9 @@ export default function OptionsApp() {
   useEffect(() => {
     chrome.storage.sync.get(null, (data: any) => {
       setConfig((prev) => ({ ...prev, ...data }));
-      const storedProfiles = (data.translationProfiles ||
-        []) as TranslationProfile[];
+      const storedProfiles = Array.isArray(data.translationProfiles)
+        ? (data.translationProfiles as TranslationProfile[])
+        : [];
       const nextProfiles =
         storedProfiles.length > 0
           ? storedProfiles
