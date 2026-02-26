@@ -7,7 +7,14 @@ const DEFAULT_CONFIG = {
     "你是一个专业的翻译引擎，请将用户发送的文本翻译为中文。如果用户发送的是中文，请翻译为目标语言（根据源语言定，通常为英文）。只返回翻译结果，如果提供了多行文本，请按行翻译，不要任何额外解释。",
 };
 
-import { build_segments } from "wasm-core";
+/** Splits text into non-empty trimmed lines (replaces wasm-core build_segments). */
+function buildSegments(text: string): string {
+  const segments = text
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return segments.length > 0 ? segments.join("\n") : text;
+}
 
 class LRUCache<K, V> {
   private cache = new Map<K, V>();
@@ -215,14 +222,18 @@ chrome.runtime.onConnect.addListener((port) => {
     port.onMessage.addListener(async (msg) => {
       if (msg.type === "TRANSLATE_TEXT") {
         try {
+          const activeConfig = await getActiveProfileConfig();
+          const { targetLang } = activeConfig;
+          const cacheKey = `${msg.payload.text}::${targetLang}`;
+
           // Check Cache First
-          const cachedTr = translationCache.get(msg.payload.text);
+          const cachedTr = translationCache.get(cacheKey);
           if (cachedTr) {
             port.postMessage({
               type: "STREAM_DATA",
               data: {
                 original: msg.payload.text,
-                targetLang: "zh-CN",
+                targetLang,
                 detectedLang: "auto",
                 translation: cachedTr,
               },
@@ -232,18 +243,14 @@ chrome.runtime.onConnect.addListener((port) => {
             return;
           }
 
-          let preprocessedText = msg.payload.text;
-          // Integration of WASM segmentation to process text into manageable sentences if it's long
-          try {
-            const segments = build_segments(msg.payload.text);
-            if (segments && segments.length > 0) {
-              preprocessedText = segments.join("\n");
-            }
-          } catch (e) {
-            console.error("[WASM] Error generating segments:", e);
-          }
+          const preprocessedText = buildSegments(msg.payload.text);
 
-          await handleTranslateStream(msg.payload.text, preprocessedText, port);
+          await handleTranslateStream(
+            msg.payload.text,
+            preprocessedText,
+            port,
+            activeConfig,
+          );
         } catch (error: unknown) {
           const errMsg = error instanceof Error ? error.message : String(error);
           port.postMessage({ type: "ERROR", error: errMsg });
@@ -306,8 +313,8 @@ async function handleTranslateStream(
   originalText: string,
   preprocessedText: string,
   port: chrome.runtime.Port,
+  activeConfig: Awaited<ReturnType<typeof getActiveProfileConfig>>,
 ) {
-  const activeConfig = await getActiveProfileConfig();
   const apiUrl = buildChatUrl(activeConfig.apiUrl);
   const apiKey = activeConfig.apiKey;
   const model = activeConfig.model;
@@ -354,7 +361,7 @@ async function handleTranslateStream(
   let result: string;
 
   if (useStreaming) {
-    result = await readStreamResponse(response, originalText, port);
+    result = await readStreamResponse(response, originalText, targetLang, port);
   } else {
     result = await readJsonResponse(response);
     // 非流式：一次性发送完整翻译
@@ -362,14 +369,15 @@ async function handleTranslateStream(
       type: "STREAM_DATA",
       data: {
         original: originalText,
-        targetLang: "zh-CN",
+        targetLang,
         detectedLang: "auto",
         translation: result,
       },
     });
   }
 
-  translationCache.put(originalText, result);
+  const cacheKey = `${originalText}::${targetLang}`;
+  translationCache.put(cacheKey, result);
   port.postMessage({ type: "STREAM_END", fullTranslation: result });
   port.disconnect();
 }
@@ -386,6 +394,7 @@ async function readJsonResponse(response: Response): Promise<string> {
 async function readStreamResponse(
   response: Response,
   originalText: string,
+  targetLang: string,
   port: chrome.runtime.Port,
 ): Promise<string> {
   const reader = response.body?.getReader();
@@ -425,7 +434,7 @@ async function readStreamResponse(
               type: "STREAM_DATA",
               data: {
                 original: originalText,
-                targetLang: "zh-CN",
+                targetLang,
                 detectedLang: "auto",
                 translation: result,
               },

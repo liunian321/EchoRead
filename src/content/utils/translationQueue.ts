@@ -15,9 +15,9 @@ export async function withTimeout<T>(
   timeoutMs: number,
   onTimeout?: () => void,
 ): Promise<T> {
-  let timeoutId: number | undefined;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeoutPromise = new Promise<T>((_resolve, reject) => {
-    timeoutId = window.setTimeout(() => {
+    timeoutId = setTimeout(() => {
       if (onTimeout) onTimeout();
       reject(new Error("Translation timeout"));
     }, timeoutMs);
@@ -26,7 +26,7 @@ export async function withTimeout<T>(
   try {
     return await Promise.race([promise, timeoutPromise]);
   } finally {
-    if (timeoutId) window.clearTimeout(timeoutId);
+    if (timeoutId) clearTimeout(timeoutId);
   }
 }
 
