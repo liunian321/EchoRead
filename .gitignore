@@ -21,3 +21,6 @@ resources/ffmpeg*
 scripts/output.txt
 scripts/input.txt
 **/bin/
+coverage/
+tsc_errors.log
+tsc_full_errors.txt
