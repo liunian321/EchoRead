@@ -17,7 +17,7 @@ export function TranslationResult({ data }: { data: ITranslationResult }) {
 
   const saveToVocabulary = () => {
     if (!data.original) return;
-    chrome.storage.local.get(["vocabulary"], (res) => {
+    chrome.storage.local.get(["vocabulary"], (res: { [key: string]: any }) => {
       const vocab: any[] = Array.isArray(res.vocabulary) ? res.vocabulary : [];
       const newEntry = {
         original: data.original,
