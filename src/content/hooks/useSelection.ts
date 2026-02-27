@@ -28,7 +28,7 @@ export function useSelection() {
   useEffect(() => {
     chrome.storage.sync.get(
       ["triggerMode", "domainBlacklist", "selectionTranslate"],
-      (data) => {
+      (data: { [key: string]: any }) => {
         configRef.current = {
           triggerMode:
             (data.triggerMode as SelectionConfig["triggerMode"]) || "none",

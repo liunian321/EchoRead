@@ -111,7 +111,8 @@ export function App() {
         "selectionTranslate",
         "floatingButtonPosition",
       ],
-      (data: StorageConfig) => {
+      (result: { [key: string]: any }) => {
+        const data = result as Partial<StorageConfig>;
         setFloatConfig({
           enabled: data.floatingButtonEnabled !== false,
           opacity: Number(data.floatingButtonOpacity || 0.9),

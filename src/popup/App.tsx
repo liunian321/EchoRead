@@ -16,7 +16,7 @@ export default function App() {
   useEffect(() => {
     chrome.storage.sync.get(
       ["translationProfiles", "activeProfileId"],
-      (data: any) => {
+      (data: { [key: string]: any }) => {
         const storedProfiles =
           (data.translationProfiles as Array<{ id: string; name: string }>) ||
           [];
