@@ -26,10 +26,6 @@ const IGNORE_TAGS = new Set([
   "textarea",
   "select",
   "option",
-  "button",
-  "nav",
-  "header",
-  "footer",
 ]);
 
 // 内联标签：跳过，继续向上查找段落根
@@ -73,11 +69,12 @@ const PARAGRAPH_TAGS = new Set([
   "figcaption",
   "dt",
   "dd",
+  "button",
+  "a",
 ]);
 
 // 跳过翻译的 ARIA role
 const SKIP_ROLES = new Set([
-  "button",
   "navigation",
   "banner",
   "toolbar",
@@ -146,9 +143,21 @@ function isDomainBlocked(host: string, blacklist: string[]) {
 
 // ── DOM Utilities ──
 
+const styleCache = new Map<HTMLElement, CSSStyleDeclaration>();
+
+function getCachedStyle(el: HTMLElement): CSSStyleDeclaration {
+  if (styleCache.has(el)) return styleCache.get(el)!;
+  const style = window.getComputedStyle(el);
+  styleCache.set(el, style);
+  return style;
+}
+
 function isBlockElement(el: HTMLElement): boolean {
   if (INLINE_TAGS.has(el.tagName.toLowerCase())) return false;
-  const display = window.getComputedStyle(el).display;
+  // 核心语义标签默认视为块级，跳过昂贵的样式查寻
+  if (PARAGRAPH_TAGS.has(el.tagName.toLowerCase())) return true;
+
+  const display = getCachedStyle(el).display;
   return (
     display === "block" ||
     display === "flex" ||
@@ -159,7 +168,7 @@ function isBlockElement(el: HTMLElement): boolean {
 }
 
 function isElementVisible(el: HTMLElement) {
-  const style = window.getComputedStyle(el);
+  const style = getCachedStyle(el);
   if (style.display === "none" || style.visibility === "hidden") return false;
   const rect = el.getBoundingClientRect();
   return rect.width > 0 && rect.height > 0;
@@ -181,7 +190,7 @@ function isTranslatableNode(node: Node) {
     if (SKIP_ROLES.has(role)) return false;
   }
 
-  if (parent.closest("button, nav, header, footer, select")) return false;
+  if (parent.closest("select")) return false;
 
   const text = node.textContent?.trim() || "";
   return text.length >= 2;
@@ -195,7 +204,10 @@ function isTranslatableBlock(el: HTMLElement): boolean {
   const cjkCount = (
     text.match(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/g) || []
   ).length;
-  if (wordCount < 2 && cjkCount < 3) return false;
+
+  const isSmallAction =
+    el.tagName.toLowerCase() === "button" || el.tagName.toLowerCase() === "a";
+  if (!isSmallAction && wordCount < 2 && cjkCount < 3) return false;
 
   if (/^https?:\/\/\S+$/.test(text)) return false;
 
@@ -247,28 +259,58 @@ function hasProcessedAncestor(el: HTMLElement): boolean {
   return false;
 }
 
+/**
+ * 优化后的扫描策略：
+ * 1. 首先通过 querySelectorAll 获取所有可能的语义容器 (Paragraph Tags)。
+ * 2. 对这些容器进行可见性、Processed 状态及有效性过滤。
+ * 3. 只有在语义容器不足或网页结构特殊时，才回退到 TreeWalker 扫描。
+ */
 function collectTranslatableBlocks(rootNode: Node, viewportOnly: boolean) {
   const blocks = new Set<HTMLElement>();
-  const walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_TEXT, {
-    acceptNode: (node) =>
-      isTranslatableNode(node)
-        ? NodeFilter.FILTER_ACCEPT
-        : NodeFilter.FILTER_SKIP,
-  });
+  const containerSelector = Array.from(PARAGRAPH_TAGS).join(",");
+  const rootElement =
+    rootNode.nodeType === Node.ELEMENT_NODE
+      ? (rootNode as HTMLElement)
+      : document.body;
 
-  let currentNode: Node | null;
-  while ((currentNode = walker.nextNode())) {
-    const parent = findParagraphRoot(currentNode);
-    if (!parent) continue;
-    if (parent.hasAttribute(PROCESSED_ATTR)) continue;
-    if (hasProcessedAncestor(parent)) continue;
-    if (!isElementVisible(parent)) continue;
-    if (!isTranslatableBlock(parent)) continue;
+  // 1. 快速扫描已知语义标签
+  const candidates = rootElement.querySelectorAll(containerSelector);
+  for (const el of Array.from(candidates) as HTMLElement[]) {
+    if (el.hasAttribute(PROCESSED_ATTR)) continue;
+    if (hasProcessedAncestor(el)) continue;
+    if (!isElementVisible(el)) continue;
+    if (!isTranslatableBlock(el)) continue;
+
     if (viewportOnly) {
-      const rect = parent.getBoundingClientRect();
+      const rect = el.getBoundingClientRect();
       if (rect.bottom <= 0 || rect.top >= window.innerHeight * 1.5) continue;
     }
-    blocks.add(parent);
+    blocks.add(el);
+  }
+
+  // 2. 对于不在语义标签内的孤立文本块，使用 TreeWalker 补充（仅限根扫描时，避免过深遍历）
+  if (blocks.size < 5) {
+    const walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) =>
+        isTranslatableNode(node)
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_SKIP,
+    });
+
+    let currentNode: Node | null;
+    while ((currentNode = walker.nextNode())) {
+      const parent = findParagraphRoot(currentNode);
+      if (!parent || blocks.has(parent)) continue;
+      if (parent.hasAttribute(PROCESSED_ATTR) || hasProcessedAncestor(parent))
+        continue;
+      if (!isElementVisible(parent) || !isTranslatableBlock(parent)) continue;
+
+      if (viewportOnly) {
+        const rect = parent.getBoundingClientRect();
+        if (rect.bottom <= 0 || rect.top >= window.innerHeight * 1.5) continue;
+      }
+      blocks.add(parent);
+    }
   }
 
   return Array.from(blocks);
@@ -312,30 +354,40 @@ function createInlineSpinner(anchor: HTMLElement): HTMLSpanElement {
 const SHADOW_STYLES = `
   :host {
     display: block;
-    all: initial;
-    font-family: inherit;
   }
   .row {
-    margin: 2px 0;
+    margin: 2px 0 0;
+    padding: 0;
     font-size: 0.92em;
-    line-height: 1.6;
-    color: #6b7280;
+    line-height: inherit;
+    color: inherit;
+    opacity: 0.8;
     word-break: break-word;
     box-sizing: border-box;
+    animation: echoFadeIn 0.3s ease-out;
   }
-  .row.error { color: #dc2626; cursor: help; }
+  .row.error {
+    color: #dc2626;
+    opacity: 1;
+    cursor: help;
+    border-left-color: #dc2626;
+  }
   .retry-btn {
     display: inline;
     margin-left: 4px;
     padding: 0;
     border: none;
     background: none;
-    color: #6b7280;
+    color: inherit;
     font-size: inherit;
     text-decoration: underline;
     cursor: pointer;
+    opacity: 0.8;
   }
-  .retry-btn:hover { color: #374151; }
+  .retry-btn:hover { opacity: 1; }
+  @keyframes echoFadeIn {
+    from { opacity: 0; transform: translateY(2px); }
+  }
 `;
 
 type TranslationRow = {
@@ -345,14 +397,70 @@ type TranslationRow = {
   host: HTMLElement;
 };
 
+/** 检测元素是否有受限的 overflow（hidden + 显式高度），不适合内部追加子元素 */
+function hasConstrainedOverflow(el: HTMLElement): boolean {
+  const style = window.getComputedStyle(el);
+  const overflowY = style.overflowY || style.overflow;
+  if (overflowY !== "hidden" && overflowY !== "clip") return false;
+  const height = style.height;
+  return height !== "auto" && height !== "" && parseFloat(height) > 0;
+}
+
+/**
+ * 创建翻译结果行并插入到合适位置。
+ * 插入策略：
+ * - 默认追加到 anchor 内部（避免成为 flex/grid 容器的新 item）
+ * - anchor 自身是 flex/grid 容器时回退为 sibling（避免挤压原文）
+ * - anchor 有受限 overflow 时回退为 sibling 插入
+ * 插入后检测上下文，对 flex/grid 布局应用安全样式。
+ */
 function createTranslationRow(anchor: HTMLElement): TranslationRow {
   const shadowHost = document.createElement("div");
   shadowHost.className = HOST_CLASS;
-  if (anchor.nextSibling) {
+
+  // anchor 自身是 flex/grid 容器时，内部插入会让 shadowHost 成为 flex item，
+  // 与原文内容并排导致布局破坏（如文字被挤成竖排单字）
+  const anchorTagName = anchor.tagName.toLowerCase();
+  const anchorDisplay = window.getComputedStyle(anchor).display;
+  const anchorIsFlex =
+    anchorDisplay.includes("flex") || anchorDisplay.includes("grid");
+
+  // 对于按钮，强烈建议插入内部以保持单一按钮身份
+  const isButton = anchorTagName === "button";
+  const insertInside =
+    (isButton || !anchorIsFlex) && !hasConstrainedOverflow(anchor);
+
+  if (insertInside) {
+    anchor.appendChild(shadowHost);
+  } else if (anchor.nextSibling) {
     anchor.parentNode!.insertBefore(shadowHost, anchor.nextSibling);
   } else {
     anchor.parentNode!.appendChild(shadowHost);
   }
+
+  // 对 flex/grid 布局上下文应用安全布局样式
+  const hostParent = shadowHost.parentElement;
+  if (hostParent) {
+    const parentDisplay = window.getComputedStyle(hostParent).display;
+    if (parentDisplay.includes("flex") || parentDisplay.includes("grid")) {
+      Object.assign(shadowHost.style, {
+        width: "100%",
+        flexBasis: "100%",
+        flexShrink: "0",
+        order: "99999",
+        minWidth: "0",
+      });
+    }
+  }
+
+  // 继承父元素的文本样式
+  Object.assign(shadowHost.style, {
+    fontSize: "inherit",
+    fontFamily: "inherit",
+    fontWeight: "inherit",
+    lineHeight: "inherit",
+    textAlign: "inherit",
+  });
 
   const shadow = shadowHost.attachShadow({ mode: "open" });
   const styleEl = document.createElement("style");
@@ -489,5 +597,9 @@ export async function translatePageContent(
     `EchoRead: translating ${targets.length} blocks (concurrency: ${concurrency})`,
   );
   const tasks = targets.map((el) => () => translateBlock(el, mergedSettings));
-  await runAllSettledWithConcurrency(tasks, mergedSettings.concurrency);
+  try {
+    await runAllSettledWithConcurrency(tasks, mergedSettings.concurrency);
+  } finally {
+    styleCache.clear();
+  }
 }

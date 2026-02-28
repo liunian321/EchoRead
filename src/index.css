@@ -1,73 +1,52 @@
 /* ===== EchoRead Design System — Light Premium ===== */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
 :root {
-  /* Light Premium Palette */
-  --bg-base: #f8f9fc;
-  --bg-elevated: #ffffff;
-  --bg-surface: #f1f3f8;
-  --bg-surface-hover: #ebedf5;
-  --bg-input: #f3f4f8;
-  --bg-input-focus: #ffffff;
+  /* Modern HSL Palette */
+  --h: 224;
+  --s: 71%;
 
-  --text-primary: #1a1d2e;
-  --text-secondary: #6b7194;
-  --text-tertiary: #9ea3be;
-  --text-on-accent: #ffffff;
+  --bg-app: hsl(var(--h), var(--s), 98%);
+  --bg-card: hsl(var(--h), var(--s), 100%);
+  --bg-muted: hsl(var(--h), 12%, 95%);
 
-  /* Accent — Purple/Blue Gradient */
-  --accent-start: #6366f1;
-  --accent-mid: #8b5cf6;
-  --accent-end: #a855f7;
-  --accent-solid: #6366f1;
-  --accent-hover: #5558e6;
-  --accent-bg: rgba(99, 102, 241, 0.08);
-  --accent-bg-hover: rgba(99, 102, 241, 0.12);
+  --text-main: hsl(var(--h), 40%, 12%);
+  --text-description: hsl(var(--h), 15%, 45%);
+  --text-hint: hsl(var(--h), 10%, 65%);
 
-  --success: #22c55e;
-  --success-bg: rgba(34, 197, 94, 0.08);
-  --warning: #f59e0b;
-  --warning-bg: rgba(245, 158, 11, 0.08);
-  --danger: #ef4444;
-  --danger-bg: rgba(239, 68, 68, 0.08);
-  --info: #3b82f6;
-  --info-bg: rgba(59, 130, 246, 0.08);
+  --accent: hsl(var(--h), var(--s), 55%);
+  --accent-hover: hsl(var(--h), var(--s), 50%);
+  --accent-soft: hsla(var(--h), var(--s), 55%, 0.1);
 
-  --border-light: rgba(0, 0, 0, 0.06);
-  --border-medium: rgba(0, 0, 0, 0.1);
-  --border-focus: rgba(99, 102, 241, 0.4);
+  --success: hsl(142, 70%, 45%);
+  --warning: hsl(38, 92%, 50%);
+  --danger: hsl(0, 84%, 60%);
 
-  /* Typography */
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-  --font-mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', monospace;
+  --border: hsla(var(--h), 20%, 20%, 0.08);
+  --border-strong: hsla(var(--h), 20%, 20%, 0.12);
 
-  /* Shadows */
-  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
-  --shadow-focus: 0 0 0 3px rgba(99, 102, 241, 0.12);
-
-  /* Radius */
-  --radius-xs: 6px;
-  --radius-sm: 10px;
-  --radius-md: 14px;
-  --radius-lg: 20px;
-  --radius-xl: 24px;
+  /* Modern Tokens */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
   --radius-full: 9999px;
 
-  /* Transitions */
-  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-out: cubic-bezier(0, 0, 0.2, 1);
-  --duration-fast: 0.15s;
-  --duration-normal: 0.25s;
-  --duration-slow: 0.4s;
+  --shadow-float:
+    0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-bubble:
+    0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-premium:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", monospace;
 }
 
 /* ===== Reset ===== */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -84,8 +63,13 @@ body {
 }
 
 /* ===== Scrollbar ===== */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
 ::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.12);
   border-radius: 3px;
@@ -217,7 +201,9 @@ body {
   cursor: default;
 }
 
-.setting-row:last-child { border-bottom: none; }
+.setting-row:last-child {
+  border-bottom: none;
+}
 
 .setting-row:hover {
   background: var(--bg-surface);
@@ -243,7 +229,10 @@ body {
 }
 
 /* ===== Setting Content ===== */
-.setting-content { flex: 1; min-width: 0; }
+.setting-content {
+  flex: 1;
+  min-width: 0;
+}
 
 .setting-title {
   font-size: 14px;
@@ -307,8 +296,12 @@ body {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
 }
 
-.toggle.on .toggle-knob { left: 21px; }
-.toggle.off .toggle-knob { left: 3px; }
+.toggle.on .toggle-knob {
+  left: 21px;
+}
+.toggle.off .toggle-knob {
+  left: 3px;
+}
 
 /* ===== Badge ===== */
 .echo-badge {
@@ -347,7 +340,12 @@ body {
 
 /* ===== Gradient Text ===== */
 .gradient-text {
-  background: linear-gradient(135deg, var(--accent-start), var(--accent-mid), var(--accent-end));
+  background: linear-gradient(
+    135deg,
+    var(--accent-start),
+    var(--accent-mid),
+    var(--accent-end)
+  );
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -362,28 +360,52 @@ body {
 
 /* ===== Animations ===== */
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes slideIn {
-  from { opacity: 0; transform: translateX(-8px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .animate-in {
   animation: fadeInUp 0.4s var(--ease-out) both;
 }
 
-.animate-in-1 { animation-delay: 0.04s; }
-.animate-in-2 { animation-delay: 0.08s; }
-.animate-in-3 { animation-delay: 0.12s; }
-.animate-in-4 { animation-delay: 0.16s; }
-.animate-in-5 { animation-delay: 0.2s; }
+.animate-in-1 {
+  animation-delay: 0.04s;
+}
+.animate-in-2 {
+  animation-delay: 0.08s;
+}
+.animate-in-3 {
+  animation-delay: 0.12s;
+}
+.animate-in-4 {
+  animation-delay: 0.16s;
+}
+.animate-in-5 {
+  animation-delay: 0.2s;
+}
 
 .loading-spinner {
   width: 16px;
@@ -552,7 +574,7 @@ body {
   font-size: 12px;
   font-weight: 500;
   color: var(--text-secondary);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   line-height: 1.6;
 }
 

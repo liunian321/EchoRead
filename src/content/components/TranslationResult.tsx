@@ -3,15 +3,13 @@ import { TranslationResult as ITranslationResult } from "../types";
 
 export function TranslationResult({ data }: { data: ITranslationResult }) {
   const [saved, setSaved] = useState(false);
+
   const playAudio = (text: string, lang: string) => {
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = lang === "auto" ? "en-US" : lang;
       window.speechSynthesis.speak(utterance);
-    } else if (data.pronunciation && text === data.original) {
-      const audio = new Audio(data.pronunciation);
-      audio.play().catch((e) => console.error("Audio playback failed", e));
     }
   };
 
@@ -34,203 +32,131 @@ export function TranslationResult({ data }: { data: ITranslationResult }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
-      {/* Original Text */}
+      {/* Original Header */}
       {data.original && (
         <div
           style={{
-            fontSize: "14px",
-            color: "var(--text-secondary)",
-            marginBottom: "8px",
-            lineHeight: "1.4",
-            paddingBottom: "8px",
-            borderBottom: "1px solid rgba(255,255,255,0.1)",
+            paddingBottom: "12px",
+            borderBottom: "1px solid var(--border)",
+            marginBottom: "12px",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "flex-start",
-            gap: "8px",
+            gap: "12px",
           }}
         >
-          <span>{data.original}</span>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <button
+          <span
+            style={{
+              fontSize: "14px",
+              color: "var(--text-description)",
+              lineHeight: "1.5",
+              fontWeight: "450",
+            }}
+          >
+            {data.original}
+          </span>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <IconButton
               onClick={saveToVocabulary}
-              title={saved ? "已添加到生词本" : "添加到生词本"}
-              style={{
-                background: "rgba(255,255,255,0.1)",
-                border: "none",
-                borderRadius: "50%",
-                width: "24px",
-                height: "24px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                color: saved ? "var(--warning)" : "#e2e8f0",
-                flexShrink: 0,
-                transition: "all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background =
-                  "rgba(255,255,255,0.2)";
-                (e.currentTarget as HTMLButtonElement).style.transform =
-                  "scale(1.1)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background =
-                  "rgba(255,255,255,0.1)";
-                (e.currentTarget as HTMLButtonElement).style.transform =
-                  "scale(1)";
-              }}
+              active={saved}
+              title={saved ? "已保存" : "保存到生词本"}
             >
               <svg
-                width="12"
-                height="12"
+                width="14"
+                height="14"
                 viewBox="0 0 24 24"
                 fill={saved ? "currentColor" : "none"}
                 stroke="currentColor"
                 strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
               >
                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
               </svg>
-            </button>
-            <button
+            </IconButton>
+            <IconButton
               onClick={() => playAudio(data.original, data.detectedLang)}
               title="朗读原文"
-              style={{
-                background: "rgba(255,255,255,0.1)",
-                border: "none",
-                borderRadius: "50%",
-                width: "24px",
-                height: "24px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                color: "#e2e8f0",
-                flexShrink: 0,
-                transition:
-                  "background 0.2s, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background =
-                  "rgba(255,255,255,0.2)";
-                (e.currentTarget as HTMLButtonElement).style.transform =
-                  "scale(1.1)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background =
-                  "rgba(255,255,255,0.1)";
-                (e.currentTarget as HTMLButtonElement).style.transform =
-                  "scale(1)";
-              }}
             >
               <svg
-                width="12"
-                height="12"
+                width="14"
+                height="14"
                 viewBox="0 0 24 24"
                 fill="currentColor"
               >
                 <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
               </svg>
-            </button>
+            </IconButton>
           </div>
         </div>
       )}
 
-      {/* Header: Lang -> Lang */}
+      {/* Meta Info */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
+          gap: "6px",
           marginBottom: "8px",
-          fontSize: "12px",
-          color: "#94a3b8", // softer meta text color
-          letterSpacing: "0.5px",
+          fontSize: "11px",
+          fontWeight: "600",
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span style={{ fontWeight: 600, color: "#f5f5f7", fontSize: "11px" }}>
-            {data.detectedLang.toUpperCase()}
-          </span>
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ opacity: 0.5 }}
-          >
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-          <span
-            style={{
-              fontWeight: 600,
-              color: "var(--accent-color)",
-              fontSize: "11px",
-            }}
-          >
-            {data.targetLang.toUpperCase()}
-          </span>
-        </div>
+        <span style={{ color: "var(--text-hint)" }}>{data.detectedLang}</span>
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="var(--text-hint)"
+          strokeWidth="3"
+        >
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+        <span style={{ color: "var(--accent)" }}>{data.targetLang}</span>
       </div>
 
-      {/* Phonetic */}
-      {data.phonetic && (
-        <div
-          style={{
-            fontSize: "13px",
-            color: "var(--text-secondary)",
-            marginBottom: "12px",
-            fontFamily: "SF Mono, Menlo, Monaco, Consolas, monospace",
-            letterSpacing: "0.2px",
-          }}
-        >
-          {data.phonetic.startsWith("/") ? data.phonetic : `/${data.phonetic}/`}
-        </div>
-      )}
-
-      {/* Translation */}
+      {/* Translation Main */}
       <div
         style={{
-          fontSize: "16px",
+          fontSize: "17px",
           fontWeight: "600",
-          lineHeight: "1.4",
+          lineHeight: "1.45",
+          color: "var(--text-main)",
           marginBottom: "16px",
-          color: "#ffffff",
+          letterSpacing: "-0.01em",
         }}
       >
         {data.translation}
       </div>
 
-      {/* Definitions */}
+      {/* Definitions Section */}
       {data.definitions && data.definitions.length > 0 && (
         <div
           style={{
-            borderTop: "1px solid rgba(255,255,255,0.1)",
             paddingTop: "12px",
-            marginTop: "4px",
+            borderTop: "1px solid var(--border)",
             display: "flex",
             flexDirection: "column",
-            gap: "10px",
+            gap: "12px",
           }}
         >
           {data.definitions.map((def, i) => (
-            <div key={i} style={{ fontSize: "13px", lineHeight: "1.4" }}>
+            <div key={i}>
               <div
-                style={{ display: "flex", alignItems: "baseline", gap: "6px" }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  marginBottom: "4px",
+                }}
               >
                 <span
                   style={{
-                    color: "var(--text-secondary)",
-                    fontWeight: "600",
                     fontSize: "10px",
-                    background: "rgba(255, 255, 255, 0.08)",
+                    fontWeight: "700",
+                    color: "var(--accent)",
+                    background: "var(--accent-soft)",
                     padding: "2px 6px",
                     borderRadius: "4px",
                     textTransform: "uppercase",
@@ -238,19 +164,28 @@ export function TranslationResult({ data }: { data: ITranslationResult }) {
                 >
                   {def.partOfSpeech}
                 </span>
-                <span style={{ color: "#e2e8f0" }}>{def.definition}</span>
+                <span
+                  style={{
+                    fontSize: "14px",
+                    color: "var(--text-main)",
+                    fontWeight: "500",
+                  }}
+                >
+                  {def.definition}
+                </span>
               </div>
               {def.example && (
                 <div
                   style={{
-                    fontSize: "12px",
-                    color: "#94a3b8",
-                    marginTop: "6px",
-                    paddingLeft: "10px",
-                    borderLeft: "2px solid rgba(255,255,255,0.1)",
+                    fontSize: "13px",
+                    color: "var(--text-description)",
+                    paddingLeft: "12px",
+                    borderLeft: "2px solid var(--border)",
+                    fontStyle: "italic",
+                    marginTop: "4px",
                   }}
                 >
-                  {def.example}
+                  “{def.example}”
                 </div>
               )}
             </div>
@@ -258,5 +193,46 @@ export function TranslationResult({ data }: { data: ITranslationResult }) {
         </div>
       )}
     </div>
+  );
+}
+
+interface IconButtonProps {
+  children: import("preact").ComponentChildren;
+  onClick: (e: MouseEvent) => void;
+  active?: boolean;
+  title?: string;
+}
+
+function IconButton({ children, onClick, active, title }: IconButtonProps) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      style={{
+        width: "28px",
+        height: "28px",
+        borderRadius: "var(--radius-sm)",
+        border: "none",
+        background: active ? "var(--accent-soft)" : "transparent",
+        color: active ? "var(--accent)" : "var(--text-hint)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+        transition: "all 0.2s ease",
+      }}
+      onMouseEnter={(e) => {
+        const t = e.currentTarget as HTMLButtonElement;
+        t.style.background = "var(--border)";
+        t.style.color = "var(--text-description)";
+      }}
+      onMouseLeave={(e) => {
+        const t = e.currentTarget as HTMLButtonElement;
+        t.style.background = active ? "var(--accent-soft)" : "transparent";
+        t.style.color = active ? "var(--accent)" : "var(--text-hint)";
+      }}
+    >
+      {children}
+    </button>
   );
 }

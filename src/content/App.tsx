@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "preact/hooks";
 import { useSelection } from "./hooks/useSelection";
 import { useTranslate } from "./hooks/useTranslate";
 import { useShortcut } from "./hooks/useShortcut";
+import { useDragging } from "./hooks/useDragging";
 import { translatePageContent } from "./utils/fullPageTranslate";
 import { Bubble } from "./components/Bubble";
 import { Skeleton } from "./components/Skeleton";
@@ -26,14 +27,20 @@ export function App() {
     iconStyle: "outline",
     selectionTranslate: true,
   });
-  const [floatPosition, setFloatPosition] = useState({
-    x: window.innerWidth - 72,
-    y: window.innerHeight - 160,
-  });
-  const dragOffset = useRef({ x: 0, y: 0 });
-  const dragging = useRef(false);
-  const moved = useRef(false);
   const floatButtonRef = useRef<HTMLButtonElement>(null);
+
+  const {
+    position: floatPosition,
+    setPosition,
+    onPointerDown: onFloatPointerDown,
+    hasMoved,
+    isDragging,
+  } = useDragging(
+    { x: window.innerWidth - 72, y: window.innerHeight - 160 },
+    (pos) => {
+      chrome.storage.sync.set({ floatingButtonPosition: pos });
+    },
+  );
 
   // Reset state when selection changes or disappears
   useEffect(() => {
@@ -121,7 +128,7 @@ export function App() {
           selectionTranslate: data.selectionTranslate !== false,
         });
         if (data.floatingButtonPosition?.x !== undefined) {
-          setFloatPosition({
+          setPosition({
             x: Number(data.floatingButtonPosition.x),
             y: Number(data.floatingButtonPosition.y),
           });
@@ -160,58 +167,8 @@ export function App() {
     return () => chrome.storage.onChanged.removeListener(handleChange);
   }, []);
 
-  useEffect(() => {
-    const handleMove = (event: PointerEvent) => {
-      if (!dragging.current) return;
-      const buttonWidth =
-        floatButtonRef.current?.offsetWidth || floatConfig.size;
-      const buttonHeight =
-        floatButtonRef.current?.offsetHeight || floatConfig.size;
-      const nextX = clampPosition(
-        event.clientX - dragOffset.current.x,
-        buttonWidth,
-        window.innerWidth,
-      );
-      const nextY = clampPosition(
-        event.clientY - dragOffset.current.y,
-        buttonHeight,
-        window.innerHeight,
-      );
-      if (
-        Math.abs(nextX - floatPosition.x) > 2 ||
-        Math.abs(nextY - floatPosition.y) > 2
-      ) {
-        moved.current = true;
-      }
-      setFloatPosition({ x: nextX, y: nextY });
-    };
-
-    const handleUp = () => {
-      if (!dragging.current) return;
-      dragging.current = false;
-      chrome.storage.sync.set({ floatingButtonPosition: floatPosition });
-    };
-
-    window.addEventListener("pointermove", handleMove);
-    window.addEventListener("pointerup", handleUp);
-    return () => {
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", handleUp);
-    };
-  }, [floatPosition, floatConfig.size]);
-
-  const onFloatPointerDown = (event: PointerEvent) => {
-    event.preventDefault();
-    dragging.current = true;
-    moved.current = false;
-    dragOffset.current = {
-      x: event.clientX - floatPosition.x,
-      y: event.clientY - floatPosition.y,
-    };
-  };
-
   const onFloatClick = () => {
-    if (moved.current || dragging.current) return;
+    if (hasMoved || isDragging) return;
     handleFullPageTranslate();
   };
 
@@ -236,53 +193,55 @@ export function App() {
             height: `${floatConfig.size}px`,
             minWidth: `${floatConfig.size}px`,
             borderRadius: "999px",
-            border: "none",
             cursor: "pointer",
             zIndex: 2147483647,
             opacity: floatConfig.opacity,
-            background:
-              floatConfig.iconStyle === "solid"
-                ? "linear-gradient(135deg, #0ea5e9, #6366f1)"
-                : "rgba(15, 23, 42, 0.78)",
-            boxShadow:
-              floatConfig.iconStyle === "solid"
-                ? "0 6px 18px rgba(79,70,229,0.35)"
-                : "0 6px 18px rgba(15,23,42,0.35)",
+            background: isFullPageTranslating
+              ? "linear-gradient(135deg, var(--accent) 0%, #7c4dff 100%)"
+              : floatConfig.iconStyle === "solid"
+                ? "var(--accent)"
+                : "var(--bg-card)",
+            boxShadow: isFullPageTranslating
+              ? "0 0 15px var(--accent)"
+              : floatConfig.iconStyle === "solid"
+                ? "var(--shadow-premium)"
+                : "var(--shadow-bubble)",
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            gap: "8px",
-            padding: "0 14px",
+            padding: "0",
             color: "#fff",
             pointerEvents: "auto",
-            backdropFilter: "blur(16px) saturate(160%)",
+            backdropFilter: "blur(20px) saturate(180%)",
+            border: isFullPageTranslating
+              ? "2px solid #fff"
+              : "1px solid var(--border)",
             fontSize: "13px",
             fontWeight: "600",
             lineHeight: "1",
             whiteSpace: "nowrap",
+            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+            transform: isFullPageTranslating ? "scale(1.1)" : "scale(1)",
           }}
           title="拖拽移动，点击翻译"
         >
           {isFullPageTranslating ? (
-            <>
-              <div
-                style={{
-                  width: `${Math.max(12, floatConfig.size / 3)}px`,
-                  height: `${Math.max(12, floatConfig.size / 3)}px`,
-                  borderRadius: "50%",
-                  border: "2px solid rgba(255,255,255,0.3)",
-                  borderTopColor: "#fff",
-                  animation: "echoReadSpin 0.8s linear infinite",
-                }}
-              />
-              <span>翻译中</span>
-            </>
+            <div
+              style={{
+                width: `${Math.max(16, floatConfig.size / 2.2)}px`,
+                height: `${Math.max(16, floatConfig.size / 2.2)}px`,
+                borderRadius: "50%",
+                border: "2.5px solid rgba(255,255,255,0.3)",
+                borderTopColor: "#fff",
+                animation: "echoReadSpin 0.8s linear infinite",
+              }}
+            />
           ) : (
             <>
               {floatConfig.iconStyle === "solid" ? (
                 <svg
-                  width={Math.max(16, floatConfig.size / 2)}
-                  height={Math.max(16, floatConfig.size / 2)}
+                  width={Math.max(18, floatConfig.size / 2)}
+                  height={Math.max(18, floatConfig.size / 2)}
                   viewBox="0 0 24 24"
                   fill="currentColor"
                 >
@@ -297,8 +256,8 @@ export function App() {
                 </svg>
               ) : (
                 <svg
-                  width={Math.max(16, floatConfig.size / 2)}
-                  height={Math.max(16, floatConfig.size / 2)}
+                  width={Math.max(18, floatConfig.size / 2)}
+                  height={Math.max(18, floatConfig.size / 2)}
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -315,7 +274,6 @@ export function App() {
                   <path d="M17 17l4 4" />
                 </svg>
               )}
-              <span>翻译网页</span>
             </>
           )}
         </button>
@@ -349,7 +307,7 @@ export function App() {
                 handleTranslate();
               }}
               style={{
-                background: "linear-gradient(135deg, #0071e3, #00d2ff)",
+                background: "var(--accent)",
                 border: "none",
                 cursor: "pointer",
                 display: "flex",
@@ -360,8 +318,8 @@ export function App() {
                 width: "100%",
                 height: "100%",
                 borderRadius: "50%",
-                transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
-                boxShadow: "0 4px 12px rgba(0, 113, 227, 0.4)",
+                transition: "all 0.2s ease",
+                boxShadow: "var(--shadow-float)",
               }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLButtonElement).style.transform =
@@ -441,9 +399,4 @@ export function App() {
       )}
     </>
   );
-}
-
-function clampPosition(value: number, size: number, maxSize: number) {
-  const margin = 8;
-  return Math.min(maxSize - size - margin, Math.max(margin, value));
 }

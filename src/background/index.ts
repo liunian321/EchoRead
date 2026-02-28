@@ -1,3 +1,5 @@
+import { LRUCache } from "./cache";
+
 const DEFAULT_CONFIG = {
   apiUrl: "https://api.openai.com/v1/chat/completions",
   apiKey: "",
@@ -14,28 +16,6 @@ function buildSegments(text: string): string {
     .map((s) => s.trim())
     .filter(Boolean);
   return segments.length > 0 ? segments.join("\n") : text;
-}
-
-class LRUCache<K, V> {
-  private cache = new Map<K, V>();
-  constructor(private capacity: number = 200) {}
-
-  get(key: K): V | undefined {
-    if (!this.cache.has(key)) return undefined;
-    const val = this.cache.get(key)!;
-    this.cache.delete(key);
-    this.cache.set(key, val);
-    return val;
-  }
-
-  put(key: K, value: V) {
-    if (this.cache.has(key)) this.cache.delete(key);
-    else if (this.cache.size >= this.capacity) {
-      const firstKey = this.cache.keys().next().value;
-      if (firstKey !== undefined) this.cache.delete(firstKey);
-    }
-    this.cache.set(key, value);
-  }
 }
 
 const translationCache = new LRUCache<string, string>(200);
@@ -75,16 +55,22 @@ const MODEL_SPECS: Record<
   "deepseek-reasoner": { maxTokens: 64000, supportedLangs: ["auto"] },
 };
 
-async function fetchWithRetry(url: string, options: RequestInit, retries = 3) {
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  retries = 3,
+  signal?: AbortSignal,
+) {
   let attempt = 0;
   while (attempt < retries) {
-    const res = await fetch(url, options);
+    signal?.throwIfAborted();
+    const res = await fetch(url, { ...options, signal });
     if (res.ok) return res;
     if (res.status === 429 || res.status >= 500) {
       attempt++;
       if (attempt >= retries)
         throw new Error(`API Error: ${res.status} ${res.statusText}`);
-      const delay = Math.pow(2, attempt) * 500; // Exponential backoff: 1s, 2s, 4s...
+      const delay = Math.pow(2, attempt) * 500;
       await new Promise((r) => setTimeout(r, delay));
       continue;
     }
@@ -219,6 +205,24 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name === "translate-stream") {
+    const abortController = new AbortController();
+    let disconnected = false;
+
+    port.onDisconnect.addListener(() => {
+      disconnected = true;
+      abortController.abort();
+    });
+
+    /** 安全发送消息，Port 已断开时静默忽略 */
+    const safeSend = (msg: Record<string, unknown>) => {
+      if (disconnected) return;
+      try {
+        port.postMessage(msg);
+      } catch {
+        disconnected = true;
+      }
+    };
+
     port.onMessage.addListener(async (msg) => {
       if (msg.type === "TRANSLATE_TEXT") {
         try {
@@ -226,10 +230,9 @@ chrome.runtime.onConnect.addListener((port) => {
           const { targetLang } = activeConfig;
           const cacheKey = `${msg.payload.text}::${targetLang}`;
 
-          // Check Cache First
           const cachedTr = translationCache.get(cacheKey);
           if (cachedTr) {
-            port.postMessage({
+            safeSend({
               type: "STREAM_DATA",
               data: {
                 original: msg.payload.text,
@@ -238,8 +241,8 @@ chrome.runtime.onConnect.addListener((port) => {
                 translation: cachedTr,
               },
             });
-            port.postMessage({ type: "STREAM_END", fullTranslation: cachedTr });
-            port.disconnect();
+            safeSend({ type: "STREAM_END", fullTranslation: cachedTr });
+            if (!disconnected) port.disconnect();
             return;
           }
 
@@ -250,11 +253,14 @@ chrome.runtime.onConnect.addListener((port) => {
             preprocessedText,
             port,
             activeConfig,
+            abortController.signal,
+            safeSend,
           );
         } catch (error: unknown) {
+          if (abortController.signal.aborted) return;
           const errMsg = error instanceof Error ? error.message : String(error);
-          port.postMessage({ type: "ERROR", error: errMsg });
-          port.disconnect();
+          safeSend({ type: "ERROR", error: errMsg });
+          if (!disconnected) port.disconnect();
         }
       }
     });
@@ -314,6 +320,8 @@ async function handleTranslateStream(
   preprocessedText: string,
   port: chrome.runtime.Port,
   activeConfig: Awaited<ReturnType<typeof getActiveProfileConfig>>,
+  signal: AbortSignal,
+  safeSend: (msg: Record<string, unknown>) => void,
 ) {
   const apiUrl = buildChatUrl(activeConfig.apiUrl);
   const apiKey = activeConfig.apiKey;
@@ -322,7 +330,6 @@ async function handleTranslateStream(
   const domainPreference = activeConfig.domainPreference;
   const systemPrompt = activeConfig.systemPrompt;
 
-  // 读取流式配置，默认 false（兼容本地 LLM）
   const storageData = await chrome.storage.sync.get(["useStreaming"]);
   const useStreaming = storageData.useStreaming === true;
 
@@ -352,20 +359,28 @@ async function handleTranslateStream(
     headers["Authorization"] = `Bearer ${apiKey}`;
   }
 
-  const response = await fetchWithRetry(apiUrl, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(payload),
-  });
+  const response = await fetchWithRetry(
+    apiUrl,
+    { method: "POST", headers, body: JSON.stringify(payload) },
+    3,
+    signal,
+  );
+
+  signal.throwIfAborted();
 
   let result: string;
 
   if (useStreaming) {
-    result = await readStreamResponse(response, originalText, targetLang, port);
+    result = await readStreamResponse(
+      response,
+      originalText,
+      targetLang,
+      safeSend,
+      signal,
+    );
   } else {
     result = await readJsonResponse(response);
-    // 非流式：一次性发送完整翻译
-    port.postMessage({
+    safeSend({
       type: "STREAM_DATA",
       data: {
         original: originalText,
@@ -378,7 +393,7 @@ async function handleTranslateStream(
 
   const cacheKey = `${originalText}::${targetLang}`;
   translationCache.put(cacheKey, result);
-  port.postMessage({ type: "STREAM_END", fullTranslation: result });
+  safeSend({ type: "STREAM_END", fullTranslation: result });
   port.disconnect();
 }
 
@@ -390,61 +405,69 @@ async function readJsonResponse(response: Response): Promise<string> {
   return body.choices?.[0]?.message?.content?.trim() || "";
 }
 
-/** 解析 SSE 流式响应 */
+/** 解析 SSE 流式响应，支持 AbortSignal 中断 */
 async function readStreamResponse(
   response: Response,
   originalText: string,
   targetLang: string,
-  port: chrome.runtime.Port,
+  safeSend: (msg: Record<string, unknown>) => void,
+  signal: AbortSignal,
 ): Promise<string> {
   const reader = response.body?.getReader();
+  if (!reader) return "";
+
   const decoder = new TextDecoder();
   let result = "";
-
-  if (!reader) return result;
-
   let buffer = "";
-  let streamDone = false;
-  while (!streamDone) {
-    const { done, value } = await reader.read();
-    if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
+  try {
+    while (true) {
+      if (signal.aborted) break;
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    for (const line of lines) {
-      const trimmedLine = line.trim();
-      if (!trimmedLine) continue;
-      if (trimmedLine === "data: [DONE]") {
-        streamDone = true;
-        break;
-      }
+      // Decode the chunk and append to buffer
+      buffer += decoder.decode(value, { stream: true });
 
-      if (trimmedLine.startsWith("data: ")) {
-        try {
-          const data = JSON.parse(trimmedLine.slice(6));
-          if (
-            data.choices &&
-            data.choices[0].delta &&
-            data.choices[0].delta.content
-          ) {
-            result += data.choices[0].delta.content;
-            port.postMessage({
-              type: "STREAM_DATA",
-              data: {
-                original: originalText,
-                targetLang,
-                detectedLang: "auto",
-                translation: result,
-              },
-            });
+      const lines = buffer.split("\n");
+      // Keep the last partial line in the buffer
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed === "data: [DONE]") continue;
+
+        if (trimmed.startsWith("data: ")) {
+          const rawJson = trimmed.slice(6);
+          try {
+            const data = JSON.parse(rawJson);
+            const delta = data.choices?.[0]?.delta?.content;
+            if (delta) {
+              result += delta;
+              safeSend({
+                type: "STREAM_DATA",
+                data: {
+                  original: originalText,
+                  targetLang,
+                  detectedLang: "auto",
+                  translation: result,
+                },
+              });
+            }
+          } catch {
+            // If JSON is incomplete, push it back to buffer (though SSE usually splits by \n)
+            // But some proxies might fail. For standard SSE, we just ignore malformed chunks.
+            console.debug("Incomplete or malformed JSON chunk:", rawJson);
           }
-        } catch (e) {
-          console.error("Parse error on chunk:", e, trimmedLine);
         }
       }
     }
+  } catch (err) {
+    if ((err as Error).name !== "AbortError") {
+      console.error("Stream reading error:", err);
+    }
+  } finally {
+    reader.cancel().catch(() => {});
   }
 
   return result;
