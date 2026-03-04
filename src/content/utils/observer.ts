@@ -14,16 +14,39 @@ export function startAutoTranslationObserver() {
   const pendingNodes = new Set<Node>();
 
   const handleMutations = debounce(() => {
-    if (pendingNodes.size === 0) return;
-    const nodesToProcess = Array.from(pendingNodes);
-    pendingNodes.clear();
+    // 扩展上下文失效时自动停止观察
+    try {
+      if (!chrome.runtime?.id) {
+        stopAutoTranslationObserver();
+        return;
+      }
+    } catch {
+      stopAutoTranslationObserver();
+      return;
+    }
 
-    // Only fetch a small batch to test dynamic injection continuously
-    for (const node of nodesToProcess) {
-      if (document.body.contains(node)) {
-        translatePageContent(5, node).catch(console.error);
+    if (pendingNodes.size === 0) return;
+    const nodes = Array.from(pendingNodes).filter((n) =>
+      document.body.contains(n),
+    );
+    pendingNodes.clear();
+    if (nodes.length === 0) return;
+
+    // Find the common ancestor to issue a single translatePageContent call
+    // instead of one per node — prevents API rate limiting blow-up
+    let root: Node = nodes[0];
+    for (let i = 1; i < nodes.length; i++) {
+      while (root && !root.contains(nodes[i])) {
+        root = root.parentNode || document.body;
       }
     }
+    if (!root || root === document) root = document.body;
+
+    translatePageContent({
+      batchSize: 20,
+      rootNode: root,
+      viewportOnly: true,
+    }).catch(console.error);
   }, 1000);
 
   observer = new MutationObserver((mutations) => {

@@ -11,6 +11,31 @@ interface BubbleProps {
   style?: h.JSX.CSSProperties;
 }
 
+const BUBBLE_CSS = `
+  @keyframes echoReadBubbleIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.92);
+      filter: blur(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      filter: blur(0);
+    }
+  }
+  @keyframes echoReadBubbleOut {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+  }
+`;
+
 export function Bubble({
   x,
   y,
@@ -45,9 +70,8 @@ export function Bubble({
         left = margin;
       }
 
-      // Prevent overflow bottom
+      // Prevent overflow bottom → show above selection
       if (top + bubbleRect.height > window.innerHeight - margin) {
-        // If bottom overflow, show above selection
         if (rect) {
           top = rect.top - bubbleRect.height - margin;
         } else {
@@ -55,7 +79,7 @@ export function Bubble({
         }
       }
 
-      // Prevent overflow top (if it didn't fit above either)
+      // Prevent overflow top
       if (top < margin) {
         top = margin;
       }
@@ -65,51 +89,66 @@ export function Bubble({
 
     updatePosition();
 
-    // Observe size changes to adjust position dynamically (e.g. icon -> result mode)
-    const observer = new ResizeObserver(() => {
-      updatePosition();
-    });
-
+    const observer = new ResizeObserver(() => updatePosition());
     if (ref.current) {
       observer.observe(ref.current);
     }
-
     return () => observer.disconnect();
-  }, [x, y, visible, rect, mode]); // Depend on mode to immediately trigger position check
+  }, [x, y, visible, rect, mode]);
 
-  const style = {
-    position: "fixed" as const,
+  const isIcon = mode === "icon";
+
+  const style: h.JSX.CSSProperties = {
+    position: "fixed",
     top: `${coords.top}px`,
     left: `${coords.left}px`,
     zIndex: 2147483647,
-    background: "rgba(28, 28, 30, 0.72)",
-    backdropFilter: "blur(20px) saturate(180%)",
-    WebkitBackdropFilter: "blur(20px) saturate(180%)",
-    borderRadius: "18px",
-    padding: mode === "icon" ? "0" : "16px",
+
+    /* Apple Glass Morphism */
+    background: isIcon ? "rgba(44, 44, 46, 0.85)" : "rgba(28, 28, 30, 0.78)",
+    backdropFilter: "blur(40px) saturate(180%)",
+    WebkitBackdropFilter: "blur(40px) saturate(180%)",
+
+    /* Generous Apple rounding */
+    borderRadius: isIcon ? "50%" : "20px",
+    padding: isIcon ? "0" : "18px",
+
+    /* Text */
     color: "#f5f5f7",
     fontFamily:
-      "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', sans-serif",
-    boxShadow:
-      "0 12px 40px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.08) inset",
-    border: "1px solid rgba(255, 255, 255, 0.1)",
-    opacity: visible ? 1 : 0,
-    transform: visible
-      ? "translateY(0) scale(1)"
-      : "translateY(12px) scale(0.92)",
-    transition: "all 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
-    pointerEvents: visible ? ("auto" as const) : ("none" as const),
-    maxWidth: "380px",
-    minWidth: "auto",
+      "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Inter', system-ui, sans-serif",
     fontSize: "14px",
-    lineHeight: "1.5",
+    lineHeight: "1.55",
+    letterSpacing: "-0.01em",
+
+    /* Shadow — multi-layered Apple depth */
+    boxShadow: [
+      "0 24px 80px rgba(0, 0, 0, 0.25)",
+      "0 8px 24px rgba(0, 0, 0, 0.15)",
+      "0 2px 6px rgba(0, 0, 0, 0.1)",
+      "inset 0 0 0 0.5px rgba(255, 255, 255, 0.12)",
+    ].join(", "),
+
+    border: "0.5px solid rgba(255, 255, 255, 0.08)",
+
+    /* Animation */
+    animation: visible
+      ? "echoReadBubbleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both"
+      : "echoReadBubbleOut 0.2s ease-in both",
+    pointerEvents: visible ? "auto" : "none",
+
+    maxWidth: isIcon ? "unset" : "420px",
+    minWidth: "auto",
     overflow: "hidden",
     ...customStyle,
   };
 
   return (
-    <div ref={ref} style={style} className="echo-read-bubble">
-      {children}
-    </div>
+    <>
+      <style>{BUBBLE_CSS}</style>
+      <div ref={ref} style={style} className="echo-read-bubble">
+        {children}
+      </div>
+    </>
   );
 }

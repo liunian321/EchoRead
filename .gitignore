@@ -21,3 +21,4 @@ resources/ffmpeg*
 scripts/output.txt
 scripts/input.txt
 **/bin/
+docs/

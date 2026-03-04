@@ -1,41 +1,56 @@
-const styles = `
-@keyframes shimmer {
-  0% { opacity: 0.5; }
-  50% { opacity: 0.8; }
-  100% { opacity: 0.5; }
-}
-.skeleton-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 8px 0;
-  width: 100%;
-}
-.skeleton-line {
-  background: rgba(255, 255, 255, 0.08);
-  animation: shimmer 2s infinite ease-in-out;
-  border-radius: 6px;
-  height: 14px;
-}
-.skeleton-line.short {
-  width: 45%;
-}
-.skeleton-line.medium {
-  width: 75%;
-}
+const SKELETON_CSS = `
+  @keyframes echoReadShimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  @keyframes echoReadPulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 0.7; }
+  }
+
+  .er-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 6px 0;
+    width: 100%;
+    animation: echoReadPulse 2.5s ease-in-out infinite;
+  }
+
+  .er-skeleton-line {
+    height: 12px;
+    border-radius: 6px;
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(255, 255, 255, 0.1) 40%,
+      rgba(255, 255, 255, 0.04) 80%
+    );
+    background-size: 200% 100%;
+    animation: echoReadShimmer 2s ease-in-out infinite;
+  }
+
+  .er-skeleton-title {
+    height: 16px;
+    width: 35%;
+    border-radius: 8px;
+    margin-bottom: 4px;
+  }
+
+  .er-skeleton-full { width: 100%; }
+  .er-skeleton-long { width: 82%; }
+  .er-skeleton-mid  { width: 60%; }
+  .er-skeleton-short { width: 40%; }
 `;
 
 export function Skeleton() {
   return (
-    <div className="skeleton-wrapper">
-      <style>{styles}</style>
-      <div
-        className="skeleton-line short"
-        style={{ height: "20px", marginBottom: "8px" }}
-      />
-      <div className="skeleton-line" />
-      <div className="skeleton-line medium" />
-      <div className="skeleton-line short" />
+    <div className="er-skeleton">
+      <style>{SKELETON_CSS}</style>
+      <div className="er-skeleton-line er-skeleton-title" />
+      <div className="er-skeleton-line er-skeleton-full" />
+      <div className="er-skeleton-line er-skeleton-long" />
+      <div className="er-skeleton-line er-skeleton-mid" />
     </div>
   );
 }

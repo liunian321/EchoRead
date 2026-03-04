@@ -9,6 +9,43 @@ import { Skeleton } from "./components/Skeleton";
 import { TranslationResult } from "./components/TranslationResult";
 import { StorageConfig } from "./types";
 
+/* ── Apple-style floating button CSS ── */
+const FLOAT_CSS = `
+  @keyframes echoReadSpin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes echoReadPulseRing {
+    0% { box-shadow: 0 0 0 0 rgba(88, 86, 214, 0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(88, 86, 214, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(88, 86, 214, 0); }
+  }
+  @keyframes echoReadGradientShift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+`;
+
+const TRANSLATE_ICON = (
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="m5 8 6 6" />
+    <path d="m4 14 4-4 4 4" />
+    <path d="M2 5h12" />
+    <path d="M7 2h1" />
+    <path d="m22 22-5-10-5 10" />
+    <path d="M14 18h6" />
+  </svg>
+);
+
 export function App() {
   const selection = useSelection();
   const { isLoading, data, error, translate, reset } = useTranslate();
@@ -23,7 +60,7 @@ export function App() {
   }>({
     enabled: true,
     opacity: 0.9,
-    size: 44,
+    size: 48,
     iconStyle: "outline",
     selectionTranslate: true,
   });
@@ -33,8 +70,7 @@ export function App() {
     position: floatPosition,
     setPosition,
     onPointerDown: onFloatPointerDown,
-    hasMoved,
-    isDragging,
+    wasRecentDrag,
   } = useDragging(
     { x: window.innerWidth - 72, y: window.innerHeight - 160 },
     (pos) => {
@@ -122,7 +158,7 @@ export function App() {
         setFloatConfig({
           enabled: data.floatingButtonEnabled !== false,
           opacity: Number(data.floatingButtonOpacity || 0.9),
-          size: Number(data.floatingButtonSize || 44),
+          size: Number(data.floatingButtonSize || 48),
           iconStyle:
             (data.floatingButtonIconStyle as "solid" | "outline") || "outline",
           selectionTranslate: data.selectionTranslate !== false,
@@ -151,7 +187,7 @@ export function App() {
             : prev.opacity,
         size:
           changes.floatingButtonSize?.newValue !== undefined
-            ? Number(changes.floatingButtonSize.newValue || 44)
+            ? Number(changes.floatingButtonSize.newValue || 48)
             : prev.size,
         iconStyle:
           changes.floatingButtonIconStyle?.newValue !== undefined
@@ -168,19 +204,20 @@ export function App() {
   }, []);
 
   const onFloatClick = () => {
-    if (hasMoved || isDragging) return;
+    // Read live drag state at click time — not a stale render snapshot
+    if (wasRecentDrag()) return;
     handleFullPageTranslate();
   };
 
   const showBubble = selection && floatConfig.selectionTranslate;
-
-  const floatingStyles = `
-    @keyframes echoReadSpin { to { transform: rotate(360deg); } }
-  `;
+  const sz = floatConfig.size;
+  const iconSz = Math.max(18, sz * 0.42);
 
   return (
     <>
-      <style>{floatingStyles}</style>
+      <style>{FLOAT_CSS}</style>
+
+      {/* ── Floating Action Button ── */}
       {floatConfig.enabled && (
         <button
           ref={floatButtonRef}
@@ -190,94 +227,72 @@ export function App() {
             position: "fixed",
             left: `${floatPosition.x}px`,
             top: `${floatPosition.y}px`,
-            height: `${floatConfig.size}px`,
-            minWidth: `${floatConfig.size}px`,
-            borderRadius: "999px",
+            width: `${sz}px`,
+            height: `${sz}px`,
+            borderRadius: "50%",
             cursor: "pointer",
             zIndex: 2147483647,
             opacity: floatConfig.opacity,
+
+            /* Apple-style glass button */
             background: isFullPageTranslating
-              ? "linear-gradient(135deg, var(--accent) 0%, #7c4dff 100%)"
+              ? "linear-gradient(135deg, #667eea, #764ba2, #667eea)"
               : floatConfig.iconStyle === "solid"
-                ? "var(--accent)"
-                : "var(--bg-card)",
+                ? "linear-gradient(135deg, #667eea, #5856d6)"
+                : "rgba(44, 44, 46, 0.8)",
+            backgroundSize: isFullPageTranslating ? "200% 200%" : "100% 100%",
+            animation: isFullPageTranslating
+              ? "echoReadGradientShift 3s ease infinite, echoReadPulseRing 1.5s ease-out infinite"
+              : "none",
+
+            backdropFilter: "blur(30px) saturate(180%)",
+            WebkitBackdropFilter: "blur(30px) saturate(180%)",
+
             boxShadow: isFullPageTranslating
-              ? "0 0 15px var(--accent)"
-              : floatConfig.iconStyle === "solid"
-                ? "var(--shadow-premium)"
-                : "var(--shadow-bubble)",
-            display: "inline-flex",
+              ? "0 8px 32px rgba(88, 86, 214, 0.4), inset 0 0 0 0.5px rgba(255, 255, 255, 0.2)"
+              : "0 4px 20px rgba(0, 0, 0, 0.2), 0 1px 4px rgba(0, 0, 0, 0.1), inset 0 0 0 0.5px rgba(255, 255, 255, 0.1)",
+
+            border: "none",
+            display: "flex",
             alignItems: "center",
             justifyContent: "center",
             padding: "0",
             color: "#fff",
             pointerEvents: "auto",
-            backdropFilter: "blur(20px) saturate(180%)",
-            border: isFullPageTranslating
-              ? "2px solid #fff"
-              : "1px solid var(--border)",
-            fontSize: "13px",
-            fontWeight: "600",
-            lineHeight: "1",
-            whiteSpace: "nowrap",
-            transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-            transform: isFullPageTranslating ? "scale(1.1)" : "scale(1)",
+            transition:
+              "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease",
+            transform: isFullPageTranslating ? "scale(1.05)" : "scale(1)",
           }}
-          title="拖拽移动，点击翻译"
+          title="拖拽移动，点击翻译整页"
         >
           {isFullPageTranslating ? (
             <div
               style={{
-                width: `${Math.max(16, floatConfig.size / 2.2)}px`,
-                height: `${Math.max(16, floatConfig.size / 2.2)}px`,
+                width: `${iconSz}px`,
+                height: `${iconSz}px`,
                 borderRadius: "50%",
-                border: "2.5px solid rgba(255,255,255,0.3)",
+                border: "2px solid rgba(255, 255, 255, 0.3)",
                 borderTopColor: "#fff",
                 animation: "echoReadSpin 0.8s linear infinite",
               }}
             />
           ) : (
-            <>
-              {floatConfig.iconStyle === "solid" ? (
-                <svg
-                  width={Math.max(18, floatConfig.size / 2)}
-                  height={Math.max(18, floatConfig.size / 2)}
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                >
-                  <path d="M4 4h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V4z" />
-                  <path
-                    d="M7 8h8M7 12h5M7 16h8"
-                    fill="none"
-                    stroke="white"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              ) : (
-                <svg
-                  width={Math.max(18, floatConfig.size / 2)}
-                  height={Math.max(18, floatConfig.size / 2)}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M5 8l6 6" />
-                  <path d="M4 14l4-4 4 4" />
-                  <path d="M2 5h12" />
-                  <path d="M7 2h1" />
-                  <path d="M22 22l-5-5" />
-                  <path d="M14 10a10 10 0 1 0 0 20" />
-                  <path d="M17 17l4 4" />
-                </svg>
-              )}
-            </>
+            <div
+              style={{
+                width: `${iconSz}px`,
+                height: `${iconSz}px`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {TRANSLATE_ICON}
+            </div>
           )}
         </button>
       )}
+
+      {/* ── Selection Bubble ── */}
       {showBubble && selection && (
         <Bubble
           x={selection.position.x}
@@ -287,13 +302,13 @@ export function App() {
           mode={mode}
           style={
             mode === "result"
-              ? { minWidth: "300px" }
+              ? { minWidth: "320px" }
               : {
-                  padding: "8px",
+                  padding: "0",
                   borderRadius: "50%",
                   minWidth: "unset",
-                  width: "40px",
-                  height: "40px",
+                  width: "42px",
+                  height: "42px",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -307,7 +322,7 @@ export function App() {
                 handleTranslate();
               }}
               style={{
-                background: "var(--accent)",
+                background: "linear-gradient(135deg, #667eea, #5856d6)",
                 border: "none",
                 cursor: "pointer",
                 display: "flex",
@@ -318,40 +333,36 @@ export function App() {
                 width: "100%",
                 height: "100%",
                 borderRadius: "50%",
-                transition: "all 0.2s ease",
-                boxShadow: "var(--shadow-float)",
+                transition: "all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                boxShadow:
+                  "0 4px 14px rgba(88, 86, 214, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2)",
               }}
               onMouseEnter={(e) => {
                 (e.currentTarget as HTMLButtonElement).style.transform =
-                  "scale(1.1)";
-                (e.currentTarget as HTMLButtonElement).style.filter =
-                  "brightness(1.1)";
+                  "scale(1.12)";
               }}
               onMouseLeave={(e) => {
                 (e.currentTarget as HTMLButtonElement).style.transform =
                   "scale(1)";
-                (e.currentTarget as HTMLButtonElement).style.filter =
-                  "brightness(1)";
               }}
               title="点击翻译"
             >
               <svg
-                width="22"
-                height="22"
+                width="20"
+                height="20"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="2.5"
+                strokeWidth="2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                <path d="M5 8l6 6" />
-                <path d="M4 14l4-4 4 4" />
+                <path d="m5 8 6 6" />
+                <path d="m4 14 4-4 4 4" />
                 <path d="M2 5h12" />
                 <path d="M7 2h1" />
-                <path d="M22 22l-5-5" />
-                <path d="M14 10a10 10 0 1 0 0 20" />
-                <path d="M17 17l4 4" />
+                <path d="m22 22-5-10-5 10" />
+                <path d="M14 18h6" />
               </svg>
             </button>
           ) : (
@@ -360,32 +371,36 @@ export function App() {
               {error && (
                 <div
                   style={{
-                    color: "#ff5252",
-                    fontSize: "14px",
-                    padding: "8px 0",
+                    color: "#ff453a",
+                    fontSize: "13.5px",
+                    padding: "4px 0",
+                    lineHeight: "1.5",
                   }}
                 >
-                  <p style={{ margin: "0 0 8px 0" }}>{error}</p>
+                  <p style={{ margin: "0 0 10px 0", fontWeight: "500" }}>
+                    {error}
+                  </p>
                   <button
                     onClick={handleTranslate}
                     style={{
-                      background: "rgba(255,255,255,0.15)",
-                      border: "none",
-                      color: "#fff",
-                      padding: "8px 16px",
-                      borderRadius: "20px",
+                      background: "rgba(255, 255, 255, 0.1)",
+                      border: "0.5px solid rgba(255, 255, 255, 0.12)",
+                      color: "#f5f5f7",
+                      padding: "8px 18px",
+                      borderRadius: "10px",
                       cursor: "pointer",
                       fontSize: "13px",
-                      fontWeight: "500",
+                      fontWeight: "550",
                       transition: "all 0.2s ease",
+                      letterSpacing: "-0.01em",
                     }}
                     onMouseEnter={(e) => {
                       (e.currentTarget as HTMLButtonElement).style.background =
-                        "rgba(255,255,255,0.25)";
+                        "rgba(255, 255, 255, 0.18)";
                     }}
                     onMouseLeave={(e) => {
                       (e.currentTarget as HTMLButtonElement).style.background =
-                        "rgba(255,255,255,0.15)";
+                        "rgba(255, 255, 255, 0.1)";
                     }}
                   >
                     重新尝试

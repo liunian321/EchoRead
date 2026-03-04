@@ -140,15 +140,19 @@ export function useSelection() {
 
     const onMouseUp = (e: MouseEvent) => {
       lastPointerEvent.current = e;
-      // Immediate update on mouseup to respond quickly after drag ends
-      // setTimeout ensures we run after the current event loop (and potentially after click events)
+
+      // IMPORTANT: composedPath() must be called synchronously during
+      // event dispatch.  After the event finishes dispatching (e.g. inside
+      // setTimeout) it returns an empty array per the DOM spec.
+      const path = e.composedPath();
+      const isClickOnApp = path.some(
+        (node) =>
+          node instanceof HTMLElement && node.id === "echoread-extension-root",
+      );
+
+      // Defer evaluation so the browser has committed the new selection
+      // state, but use the path captured synchronously above.
       setTimeout(() => {
-        const path = e.composedPath();
-        const isClickOnApp = path.some(
-          (node) =>
-            node instanceof HTMLElement &&
-            node.id === "echoread-extension-root",
-        );
         // Do not re-evaluate selection if the user clicked inside our own UI.
         if (isClickOnApp) return;
 
