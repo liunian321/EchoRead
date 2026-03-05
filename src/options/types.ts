@@ -15,6 +15,7 @@ export interface Config {
   selectionShortcut: string;
   translationConcurrency: number;
   translationTimeoutMs: number;
+  lazyFullPageTranslate: boolean;
 
   temperature: number;
   systemPrompt: string;

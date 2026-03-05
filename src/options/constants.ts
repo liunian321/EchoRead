@@ -17,6 +17,7 @@ export const DEFAULT_CONFIG: Config = {
   selectionShortcut: "Alt+S",
   translationConcurrency: 3,
   translationTimeoutMs: 30000,
+  lazyFullPageTranslate: true,
 
   temperature: 0.3,
   systemPrompt:

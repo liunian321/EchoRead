@@ -100,13 +100,24 @@ export function App() {
     setIsFullPageTranslating(true);
     isFullPageTranslatingRef.current = true;
     try {
+      const data = (await chrome.storage.sync.get([
+        "lazyFullPageTranslate",
+      ])) as StorageConfig;
+      const lazyFullPageTranslate = data.lazyFullPageTranslate !== false;
       console.info("EchoRead: full page translate start");
       await translatePageContent({
-        batchSize: Number.MAX_SAFE_INTEGER,
-        viewportOnly: false,
+        batchSize: lazyFullPageTranslate ? 30 : Number.MAX_SAFE_INTEGER,
+        viewportOnly: lazyFullPageTranslate,
       });
       import("./utils/observer")
-        .then((m) => m.startAutoTranslationObserver())
+        .then((m) => {
+          m.stopAutoTranslationObserver();
+          m.startAutoTranslationObserver({
+            enableScroll: lazyFullPageTranslate,
+            viewportBatchSize: 30,
+            mutationBatchSize: 20,
+          });
+        })
         .catch(console.error);
       console.info("EchoRead: full page translate done");
     } catch (error) {

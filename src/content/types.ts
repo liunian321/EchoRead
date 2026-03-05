@@ -30,5 +30,6 @@ export interface StorageConfig {
   floatingButtonSize?: number | string;
   floatingButtonIconStyle?: "solid" | "outline";
   selectionTranslate?: boolean;
+  lazyFullPageTranslate?: boolean;
   floatingButtonPosition?: { x: number; y: number };
 }

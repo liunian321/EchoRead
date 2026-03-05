@@ -1,26 +1,54 @@
 import { translatePageContent } from "./fullPageTranslate";
 import { debounce } from "./index";
 
-let observer: MutationObserver | null = null;
-let isObserving = false;
+type AutoTranslationObserverOptions = {
+  enableScroll?: boolean;
+  viewportBatchSize?: number;
+  mutationBatchSize?: number;
+};
 
-/**
- * Initializes a mutation observer to watch for new content dynamically added to the page (e.g. infinite scrolling)
- * and triggers translation batching automatically.
- */
-export function startAutoTranslationObserver() {
+let observer: MutationObserver | null = null;
+let scrollListener: ((this: Window, ev: Event) => void) | null = null;
+let isObserving = false;
+let isTranslating = false;
+let pendingTask: (() => Promise<void>) | null = null;
+
+function hasValidRuntime() {
+  try {
+    return Boolean(chrome.runtime?.id);
+  } catch {
+    return false;
+  }
+}
+
+function enqueueTranslation(task: () => Promise<void>) {
+  if (isTranslating) {
+    pendingTask = task;
+    return;
+  }
+  isTranslating = true;
+  task()
+    .catch(console.error)
+    .finally(() => {
+      isTranslating = false;
+      if (pendingTask) {
+        const nextTask = pendingTask;
+        pendingTask = null;
+        enqueueTranslation(nextTask);
+      }
+    });
+}
+
+export function startAutoTranslationObserver(options: AutoTranslationObserverOptions = {}) {
   if (isObserving) return;
+  const enableScroll = options.enableScroll !== false;
+  const viewportBatchSize = Math.max(1, options.viewportBatchSize || 30);
+  const mutationBatchSize = Math.max(1, options.mutationBatchSize || 20);
 
   const pendingNodes = new Set<Node>();
 
   const handleMutations = debounce(() => {
-    // 扩展上下文失效时自动停止观察
-    try {
-      if (!chrome.runtime?.id) {
-        stopAutoTranslationObserver();
-        return;
-      }
-    } catch {
+    if (!hasValidRuntime()) {
       stopAutoTranslationObserver();
       return;
     }
@@ -42,11 +70,13 @@ export function startAutoTranslationObserver() {
     }
     if (!root || root === document) root = document.body;
 
-    translatePageContent({
-      batchSize: 20,
-      rootNode: root,
-      viewportOnly: true,
-    }).catch(console.error);
+    enqueueTranslation(() =>
+      translatePageContent({
+        batchSize: mutationBatchSize,
+        rootNode: root,
+        viewportOnly: true,
+      }),
+    );
   }, 1000);
 
   observer = new MutationObserver((mutations) => {
@@ -55,7 +85,6 @@ export function startAutoTranslationObserver() {
       m.addedNodes.forEach((node) => {
         if (node.nodeType === Node.ELEMENT_NODE) {
           const el = node as HTMLElement;
-          // Skip our own injected nodes and React/Vue internal text nodes
           if (
             !el.classList?.contains("echo-read-bilingual") &&
             !el.classList?.contains("echo-read-inline-spinner") &&
@@ -73,6 +102,26 @@ export function startAutoTranslationObserver() {
     }
   });
 
+  if (enableScroll) {
+    const handleScroll = debounce(() => {
+      if (!hasValidRuntime()) {
+        stopAutoTranslationObserver();
+        return;
+      }
+      enqueueTranslation(() =>
+        translatePageContent({
+          batchSize: viewportBatchSize,
+          rootNode: document.body,
+          viewportOnly: true,
+        }),
+      );
+    }, 350);
+    scrollListener = function onScroll() {
+      handleScroll();
+    };
+    window.addEventListener("scroll", scrollListener, { passive: true });
+  }
+
   observer.observe(document.body, {
     childList: true,
     subtree: true,
@@ -83,6 +132,12 @@ export function startAutoTranslationObserver() {
 }
 
 export function stopAutoTranslationObserver() {
+  pendingTask = null;
+  isTranslating = false;
+  if (scrollListener) {
+    window.removeEventListener("scroll", scrollListener);
+    scrollListener = null;
+  }
   if (observer) {
     observer.disconnect();
     observer = null;
