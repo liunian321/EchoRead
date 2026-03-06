@@ -3,7 +3,6 @@ export interface Config {
   apiKey: string;
   model: string;
   targetLang: string;
-  engine: string;
   domainPreference: string;
   autoDetect: boolean;
   translationDisplay: string;
@@ -25,6 +24,10 @@ export interface Config {
   floatingButtonOpacity: number;
   floatingButtonSize: number;
   floatingButtonIconStyle: "solid" | "outline";
+  translationCacheEnabled: boolean;
+  translationCacheMaxEntries: number;
+  translationCacheMaxBytes: number;
+  translationCacheTtlMs: number;
 }
 
 export type TabId =
@@ -42,7 +45,6 @@ export type TranslationProfile = {
   targetLang: string;
   model: string;
   domainPreference: string;
-  engine: string;
 };
 
 export type ModelInfo = {

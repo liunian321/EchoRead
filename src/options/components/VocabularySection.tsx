@@ -40,137 +40,68 @@ export function VocabularySection() {
   };
 
   return (
-    <div className="section-card animate-in">
-      <div
-        className="section-header"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
+    <div className="animate-in">
+      <div className="flex justify-between items-center mb-6">
         <div>
-          <h2 className="section-title">生词本</h2>
-          <p className="section-desc">您在翻译时保存的单词和短句。</p>
+          <h2 className="options-section-title mb-1!">生词本</h2>
+          <p className="options-section-desc">您在翻译时保存的单词和短句。</p>
         </div>
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div className="flex gap-[10px]">
           <button
-            className="echo-btn echo-btn-ghost echo-btn-sm"
+            className="echo-btn echo-btn-ghost echo-btn-sm px-3 py-[6px]"
             onClick={exportVocabulary}
             disabled={vocabulary.length === 0}
-            style={{ padding: "6px 12px" }}
           >
             导出 JSON
           </button>
           <button
-            className="echo-btn echo-btn-ghost echo-btn-sm"
+            className="echo-btn echo-btn-ghost echo-btn-sm px-3 py-[6px] text-(--danger)!"
             onClick={handleClearAll}
             disabled={vocabulary.length === 0}
-            style={{ padding: "6px 12px", color: "var(--danger)" }}
           >
             清空
           </button>
         </div>
       </div>
 
-      <div
-        className="section-content"
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "12px",
-          maxHeight: "60vh",
-          overflowY: "auto",
-          paddingRight: "8px",
-        }}
-      >
+      <div className="flex flex-col gap-3 max-h-[60vh] overflow-y-auto pr-2">
         {vocabulary.length === 0 ? (
-          <div
-            style={{
-              textAlign: "center",
-              padding: "40px 0",
-              color: "var(--text-tertiary)",
-            }}
-          >
+          <div className="text-center py-10 text-(--text-tertiary)">
             生词本为空，试试在翻译划词弹窗中点击收藏按钮吧。
           </div>
         ) : (
           vocabulary.map((item, index) => (
-            <div
-              key={index}
-              className="setting-row"
-              style={{ alignItems: "flex-start", padding: "16px" }}
-            >
-              <div className="setting-content" style={{ flex: 1 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: "8px",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#f5f5f7",
-                    }}
-                  >
+            <div key={index} className="setting-row items-start p-4">
+              <div className="setting-content flex-1">
+                <div className="flex justify-between mb-2">
+                  <div className="text-[15px] font-semibold text-(--text-primary)">
                     {item.original}
                   </div>
-                  <span
-                    style={{
-                      fontSize: "11px",
-                      color: "var(--text-tertiary)",
-                      background: "rgba(255,255,255,0.05)",
-                      padding: "2px 6px",
-                      borderRadius: "10px",
-                    }}
-                  >
+                  <span className="text-[11px] text-(--text-tertiary) bg-white/5 px-[6px] py-[2px] rounded-[10px]">
                     {item.detectedLang?.toUpperCase()}
                   </span>
                 </div>
-                <div
-                  style={{
-                    fontSize: "14px",
-                    color: "var(--text-secondary)",
-                    lineHeight: "1.5",
-                    marginBottom: "8px",
-                  }}
-                >
+                <div className="text-sm text-(--text-secondary) leading-relaxed mb-2">
                   {item.translation}
                 </div>
                 {item.url && (
-                  <div style={{ fontSize: "11px" }}>
+                  <div className="text-[11px]">
                     <a
                       href={item.url}
                       target="_blank"
-                      style={{
-                        color: "var(--accent-solid)",
-                        textDecoration: "none",
-                      }}
+                      className="text-(--accent-solid) no-underline"
                     >
                       原文来源
                     </a>
-                    <span
-                      style={{
-                        marginLeft: "10px",
-                        color: "var(--text-tertiary)",
-                      }}
-                    >
+                    <span className="ml-[10px] text-(--text-tertiary)">
                       {new Date(item.timestamp).toLocaleString()}
                     </span>
                   </div>
                 )}
               </div>
               <button
-                className="echo-btn echo-btn-ghost echo-btn-sm"
+                className="echo-btn echo-btn-ghost echo-btn-sm ml-4 p-[6px] text-(--danger)!"
                 onClick={() => handleDelete(index)}
-                style={{
-                  marginLeft: "16px",
-                  padding: "6px",
-                  color: "var(--danger)",
-                }}
                 title="删除"
               >
                 <svg

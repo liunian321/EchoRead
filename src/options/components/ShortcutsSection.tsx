@@ -7,25 +7,19 @@ export function ShortcutsSection({ config, updateConfig }: SectionProps) {
       <h2 className="options-section-title">快捷键</h2>
       <p className="options-section-desc">自定义键盘快捷键以快速触发翻译功能</p>
 
-      <div className="echo-card" style={{ marginBottom: "24px" }}>
+      <div className="echo-card mb-6">
         <div className="setting-row">
-          <div
-            className="setting-icon"
-            style={{
-              background: "var(--accent-bg)",
-              color: "var(--accent-solid)",
-            }}
-          >
+          <div className="setting-icon text-(--accent-solid)">
             <IconKeyboard />
           </div>
           <div className="setting-content">
             <div className="setting-title">全页翻译</div>
             <div className="setting-desc">翻译当前页面的全部文本内容</div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div className="flex items-center gap-2">
             <input
               type="text"
-              className="echo-input"
+              className="echo-input w-[100px] text-center font-mono text-xs"
               value={config.fullPageShortcut}
               onInput={(e) =>
                 updateConfig(
@@ -33,21 +27,12 @@ export function ShortcutsSection({ config, updateConfig }: SectionProps) {
                   (e.target as HTMLInputElement).value,
                 )
               }
-              style={{
-                width: "100px",
-                textAlign: "center",
-                fontFamily: "var(--font-mono)",
-                fontSize: "12px",
-              }}
             />
           </div>
         </div>
 
         <div className="setting-row">
-          <div
-            className="setting-icon"
-            style={{ background: "var(--success-bg)", color: "var(--success)" }}
-          >
+          <div className="setting-icon text-(--success)">
             <svg
               width="18"
               height="18"
@@ -67,7 +52,7 @@ export function ShortcutsSection({ config, updateConfig }: SectionProps) {
           </div>
           <input
             type="text"
-            className="echo-input"
+            className="echo-input w-[100px] text-center font-mono text-xs"
             value={config.selectionShortcut}
             onInput={(e) =>
               updateConfig(
@@ -75,28 +60,11 @@ export function ShortcutsSection({ config, updateConfig }: SectionProps) {
                 (e.target as HTMLInputElement).value,
               )
             }
-            style={{
-              width: "100px",
-              textAlign: "center",
-              fontFamily: "var(--font-mono)",
-              fontSize: "12px",
-            }}
           />
         </div>
       </div>
 
-      <div
-        style={{
-          padding: "16px 20px",
-          background: "var(--accent-bg)",
-          borderRadius: "var(--radius-sm)",
-          display: "flex",
-          alignItems: "center",
-          gap: "12px",
-          fontSize: "13px",
-          color: "var(--accent-solid)",
-        }}
-      >
+      <div className="p-4 px-5 bg-(--accent-bg) rounded-sm flex items-center gap-3 text-[13px] text-(--accent-solid)">
         <svg
           width="18"
           height="18"

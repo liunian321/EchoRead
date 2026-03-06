@@ -8,16 +8,10 @@ export function DisplaySection({ config, updateConfig }: SectionProps) {
       <h2 className="options-section-title">显示设置</h2>
       <p className="options-section-desc">调整翻译结果的显示方式和样式</p>
 
-      <div className="echo-card" style={{ marginBottom: "24px" }}>
+      <div className="echo-card mb-6">
         {/* Translation Display Mode */}
         <div className="setting-row">
-          <div
-            className="setting-icon"
-            style={{
-              background: "var(--accent-bg)",
-              color: "var(--accent-solid)",
-            }}
-          >
+          <div className="setting-icon text-(--accent-solid)">
             <IconDisplay />
           </div>
           <div className="setting-content">
@@ -43,10 +37,7 @@ export function DisplaySection({ config, updateConfig }: SectionProps) {
 
         {/* Font Size */}
         <div className="setting-row">
-          <div
-            className="setting-icon"
-            style={{ background: "var(--warning-bg)", color: "var(--warning)" }}
-          >
+          <div className="setting-icon text-(--warning)">
             <svg
               width="18"
               height="18"
@@ -68,7 +59,7 @@ export function DisplaySection({ config, updateConfig }: SectionProps) {
               翻译文字的显示大小 ({config.fontSize}px)
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <div className="flex items-center gap-3">
             <input
               type="range"
               min="10"
@@ -80,7 +71,7 @@ export function DisplaySection({ config, updateConfig }: SectionProps) {
                   Number((e.target as HTMLInputElement).value),
                 )
               }
-              style={{ width: "120px", accentColor: "var(--accent-solid)" }}
+              className="w-[120px]"
             />
             <span className="setting-value">{config.fontSize}px</span>
           </div>
@@ -89,18 +80,12 @@ export function DisplaySection({ config, updateConfig }: SectionProps) {
 
       {/* Show Original */}
       <div className="section-label">原文显示</div>
-      <div className="echo-card" style={{ marginBottom: "24px" }}>
+      <div className="echo-card mb-6">
         <div
           className="setting-row clickable"
           onClick={() => updateConfig("showOriginal", !config.showOriginal)}
         >
-          <div
-            className="setting-icon"
-            style={{
-              background: "var(--bg-surface)",
-              color: "var(--text-secondary)",
-            }}
-          >
+          <div className="setting-icon text-(--text-secondary) bg-(--bg-surface)">
             <svg
               width="18"
               height="18"
@@ -129,24 +114,14 @@ export function DisplaySection({ config, updateConfig }: SectionProps) {
       {/* Preview */}
       <div className="section-label">效果预览</div>
       <div className="echo-card">
-        <div style={{ padding: "20px" }}>
-          <p
-            style={{
-              fontSize: "15px",
-              color: "var(--text-primary)",
-              lineHeight: "1.8",
-              marginBottom: "8px",
-            }}
-          >
+        <div className="p-5">
+          <p className="text-[15px] text-(--text-primary) leading-[1.8] mb-2">
             The quick brown fox jumps over the lazy dog.
           </p>
           <p
+            className="text-(--accent-solid) leading-[1.6] italic opacity-85"
             style={{
               fontSize: `${config.fontSize}px`,
-              color: "var(--accent-solid)",
-              lineHeight: "1.6",
-              fontStyle: "italic",
-              opacity: 0.85,
             }}
           >
             敏捷的棕色狐狸跳过了懒惰的狗。

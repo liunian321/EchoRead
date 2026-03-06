@@ -1,4 +1,8 @@
-import { LRUCache } from "./cache";
+import {
+  CacheClearFilter,
+  TranslationCache,
+  TranslationCacheConfig,
+} from "./cache";
 
 const DEFAULT_CONFIG = {
   apiUrl: "https://api.openai.com/v1/chat/completions",
@@ -9,6 +13,19 @@ const DEFAULT_CONFIG = {
     "你是一个专业的翻译引擎，请将用户发送的文本翻译为中文。如果用户发送的是中文，请翻译为目标语言（根据源语言定，通常为英文）。只返回翻译结果，如果提供了多行文本，请按行翻译，不要任何额外解释。",
 };
 
+const DEFAULT_TRANSLATION_CACHE_CONFIG: TranslationCacheConfig = {
+  enabled: false,
+  maxEntries: 2000,
+  maxBytes: 20 * 1024 * 1024,
+  ttlMs: 7 * 24 * 60 * 60 * 1000,
+};
+const CACHE_CONFIG_KEYS = [
+  "translationCacheEnabled",
+  "translationCacheMaxEntries",
+  "translationCacheMaxBytes",
+  "translationCacheTtlMs",
+] as const;
+
 /** Splits text into non-empty trimmed lines (replaces wasm-core build_segments). */
 function buildSegments(text: string): string {
   const segments = text
@@ -18,9 +35,76 @@ function buildSegments(text: string): string {
   return segments.length > 0 ? segments.join("\n") : text;
 }
 
-const translationCache = new LRUCache<string, string>(200);
+const translationCache = new TranslationCache(DEFAULT_TRANSLATION_CACHE_CONFIG);
+let cacheConfig: TranslationCacheConfig = DEFAULT_TRANSLATION_CACHE_CONFIG;
 const MODEL_CACHE_KEY = "modelListCache";
 const MODEL_CACHE_TTL = 24 * 60 * 60 * 1000;
+
+function clampNum(value: unknown, min: number, max: number, fallback: number) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.trunc(n)));
+}
+
+function toCacheConfig(data: Record<string, unknown>): TranslationCacheConfig {
+  return {
+    enabled:
+      typeof data.translationCacheEnabled === "boolean"
+        ? data.translationCacheEnabled
+        : DEFAULT_TRANSLATION_CACHE_CONFIG.enabled,
+    maxEntries: clampNum(
+      data.translationCacheMaxEntries,
+      100,
+      50000,
+      DEFAULT_TRANSLATION_CACHE_CONFIG.maxEntries,
+    ),
+    maxBytes: clampNum(
+      data.translationCacheMaxBytes,
+      256 * 1024,
+      1024 * 1024 * 1024,
+      DEFAULT_TRANSLATION_CACHE_CONFIG.maxBytes,
+    ),
+    ttlMs: clampNum(
+      data.translationCacheTtlMs,
+      60 * 1000,
+      365 * 24 * 60 * 60 * 1000,
+      DEFAULT_TRANSLATION_CACHE_CONFIG.ttlMs,
+    ),
+  };
+}
+
+async function syncCacheConfig() {
+  const data = (await chrome.storage.sync.get([
+    ...CACHE_CONFIG_KEYS,
+  ])) as Record<string, unknown>;
+  cacheConfig = toCacheConfig(data);
+  translationCache.setConfig(cacheConfig);
+}
+
+void syncCacheConfig();
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "sync") return;
+  if (
+    changes.translationCacheEnabled ||
+    changes.translationCacheMaxEntries ||
+    changes.translationCacheMaxBytes ||
+    changes.translationCacheTtlMs
+  ) {
+    const next: Record<string, unknown> = {
+      translationCacheEnabled:
+        changes.translationCacheEnabled?.newValue ?? cacheConfig.enabled,
+      translationCacheMaxEntries:
+        changes.translationCacheMaxEntries?.newValue ?? cacheConfig.maxEntries,
+      translationCacheMaxBytes:
+        changes.translationCacheMaxBytes?.newValue ?? cacheConfig.maxBytes,
+      translationCacheTtlMs:
+        changes.translationCacheTtlMs?.newValue ?? cacheConfig.ttlMs,
+    };
+    cacheConfig = toCacheConfig(next);
+    translationCache.setConfig(cacheConfig);
+  }
+});
 
 type TranslationProfile = {
   id: string;
@@ -28,7 +112,6 @@ type TranslationProfile = {
   targetLang: string;
   model: string;
   domainPreference?: string;
-  engine?: string;
 };
 
 type ModelInfo = {
@@ -228,9 +311,8 @@ chrome.runtime.onConnect.addListener((port) => {
         try {
           const activeConfig = await getActiveProfileConfig();
           const { targetLang } = activeConfig;
-          const cacheKey = `${msg.payload.text}::${targetLang}`;
-
-          const cachedTr = translationCache.get(cacheKey);
+          await translationCache.warmup();
+          const cachedTr = translationCache.get(msg.payload.text, targetLang);
           if (cachedTr) {
             safeSend({
               type: "STREAM_DATA",
@@ -306,6 +388,45 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         );
         const body = await resp.json();
         sendResponse({ success: true, status: resp.status, body });
+      } catch (error: unknown) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        sendResponse({ success: false, error: errMsg });
+      }
+    })();
+    return true;
+  }
+  if (message?.type === "GET_TRANSLATION_CACHE_STATS") {
+    sendResponse({
+      success: true,
+      data: {
+        ...translationCache.getStats(),
+        config: translationCache.getConfig(),
+      },
+    });
+    return false;
+  }
+  if (message?.type === "CLEAR_TRANSLATION_CACHE") {
+    const confirmed = message?.confirmed === true;
+    if (!confirmed) {
+      sendResponse({ success: false, error: "清理缓存需要二次确认" });
+      return false;
+    }
+    (async () => {
+      try {
+        const filter = (message?.filter || {}) as CacheClearFilter;
+        const hasFilter = Object.keys(filter).length > 0;
+        if (hasFilter) {
+          await translationCache.clearByFilter(filter);
+        } else {
+          await translationCache.clearAll();
+        }
+        sendResponse({
+          success: true,
+          data: {
+            ...translationCache.getStats(),
+            config: translationCache.getConfig(),
+          },
+        });
       } catch (error: unknown) {
         const errMsg = error instanceof Error ? error.message : String(error);
         sendResponse({ success: false, error: errMsg });
@@ -391,8 +512,7 @@ async function handleTranslateStream(
     });
   }
 
-  const cacheKey = `${originalText}::${targetLang}`;
-  translationCache.put(cacheKey, result);
+  translationCache.put(originalText, targetLang, result, "auto");
   safeSend({ type: "STREAM_END", fullTranslation: result });
   port.disconnect();
 }

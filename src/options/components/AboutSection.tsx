@@ -6,16 +6,9 @@ export function AboutSection() {
       <h2 className="options-section-title">关于 EchoRead</h2>
       <p className="options-section-desc">高性能 AI 翻译与阅读辅助浏览器插件</p>
 
-      <div className="echo-card" style={{ marginBottom: "24px" }}>
+      <div className="echo-card mb-6">
         <div className="setting-row">
-          <div
-            className="setting-icon"
-            style={{
-              background:
-                "linear-gradient(135deg, var(--accent-start), var(--accent-end))",
-              color: "white",
-            }}
-          >
+          <div className="w-9 h-9 rounded-[8px] bg-(--accent-solid) flex items-center justify-center shrink-0">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
               <path
                 d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"
@@ -41,10 +34,7 @@ export function AboutSection() {
         </div>
 
         <div className="setting-row">
-          <div
-            className="setting-icon"
-            style={{ background: "var(--success-bg)", color: "var(--success)" }}
-          >
+          <div className="setting-icon text-(--success)">
             <IconShield />
           </div>
           <div className="setting-content">
@@ -56,10 +46,7 @@ export function AboutSection() {
         </div>
 
         <div className="setting-row">
-          <div
-            className="setting-icon"
-            style={{ background: "var(--info-bg)", color: "var(--info)" }}
-          >
+          <div className="setting-icon text-(--info)">
             <svg
               width="18"
               height="18"
@@ -109,11 +96,7 @@ export function AboutSection() {
           { icon: "🌐", title: "多语言", desc: "支持 11+ 种语言的互译" },
         ].map((feat, i) => (
           <div className="setting-row" key={i}>
-            <div
-              style={{ fontSize: "20px", width: "36px", textAlign: "center" }}
-            >
-              {feat.icon}
-            </div>
+            <div className="text-[20px] w-[36px] text-center">{feat.icon}</div>
             <div className="setting-content">
               <div className="setting-title">{feat.title}</div>
               <div className="setting-desc">{feat.desc}</div>

@@ -6,7 +6,7 @@ export default ts.config(
   js.configs.recommended,
   ...ts.configs.recommended,
   {
-    ignores: ["dist/**", "wasm-core/pkg/**"],
+    ignores: ["dist/**", "wasm-core/pkg/**", "coverage/**"],
   },
   {
     languageOptions: {

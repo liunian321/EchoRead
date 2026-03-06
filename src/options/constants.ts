@@ -5,7 +5,6 @@ export const DEFAULT_CONFIG: Config = {
   apiKey: "",
   model: "gpt-3.5-turbo",
   targetLang: "zh-CN",
-  engine: "openai",
   domainPreference: "",
   autoDetect: true,
   translationDisplay: "inline",
@@ -28,6 +27,10 @@ export const DEFAULT_CONFIG: Config = {
   floatingButtonOpacity: 0.9,
   floatingButtonSize: 44,
   floatingButtonIconStyle: "outline",
+  translationCacheEnabled: false,
+  translationCacheMaxEntries: 2000,
+  translationCacheMaxBytes: 20 * 1024 * 1024,
+  translationCacheTtlMs: 7 * 24 * 60 * 60 * 1000,
 };
 
 export const LANGUAGES = [
@@ -55,11 +58,4 @@ export const MODELS = [
   "claude-3-opus",
   "deepseek-chat",
   "deepseek-reasoner",
-];
-
-export const ENGINE_OPTIONS = [
-  { value: "openai", label: "OpenAI 兼容" },
-  { value: "anthropic", label: "Anthropic" },
-  { value: "deepseek", label: "DeepSeek" },
-  { value: "custom", label: "自定义" },
 ];

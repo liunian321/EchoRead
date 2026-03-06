@@ -94,7 +94,6 @@ export default function OptionsApp() {
                 targetLang: data.targetLang || DEFAULT_CONFIG.targetLang,
                 model: data.model || DEFAULT_CONFIG.model,
                 domainPreference: data.domainPreference || "",
-                engine: data.engine || "openai",
               },
             ];
       const nextActiveId =
@@ -109,7 +108,6 @@ export default function OptionsApp() {
         targetLang: nextActiveProfile.targetLang,
         model: nextActiveProfile.model,
         domainPreference: nextActiveProfile.domainPreference,
-        engine: nextActiveProfile.engine,
       }));
       if (storedProfiles.length === 0) {
         chrome.storage.sync.set({
@@ -134,20 +132,31 @@ export default function OptionsApp() {
 
   useEffect(() => {
     if (!isLoaded) return;
+    const saveState = () => {
+      chrome.storage.sync.set({
+        ...config,
+        translationProfiles: profiles,
+        activeProfileId,
+      });
+    };
+
     const timer = setTimeout(() => {
       setSaving(true);
-      chrome.storage.sync.set(
-        { ...config, translationProfiles: profiles, activeProfileId },
-        () => {
-          setTimeout(() => {
-            setSaving(false);
-            setSaved(true);
-            setTimeout(() => setSaved(false), 2000);
-          }, 300);
-        },
-      );
+      saveState();
+      setTimeout(() => {
+        setSaving(false);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      }, 300);
     }, 1000);
-    return () => clearTimeout(timer);
+
+    const handleBeforeUnload = () => saveState();
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
   }, [config, profiles, activeProfileId, isLoaded]);
 
   const updateProfiles = useCallback(
@@ -163,10 +172,7 @@ export default function OptionsApp() {
   );
 
   const updateProfileField = useCallback(
-    (
-      field: "targetLang" | "model" | "domainPreference" | "engine",
-      value: string,
-    ) => {
+    (field: "targetLang" | "model" | "domainPreference", value: string) => {
       updateConfig(field as keyof Config, value as Config[keyof Config]);
       setProfiles((prev) =>
         prev.map((profile) =>
@@ -187,7 +193,6 @@ export default function OptionsApp() {
       updateConfig("targetLang", nextProfile.targetLang);
       updateConfig("model", nextProfile.model);
       updateConfig("domainPreference", nextProfile.domainPreference);
-      updateConfig("engine", nextProfile.engine);
       chrome.storage.sync.set({ activeProfileId: nextId });
     },
     [profiles, updateConfig],
@@ -211,7 +216,6 @@ export default function OptionsApp() {
       targetLang: config.targetLang,
       model: config.model,
       domainPreference: config.domainPreference,
-      engine: config.engine,
     };
     const nextProfiles = [...profiles, newProfile];
     updateProfiles(nextProfiles, newProfile.id);
@@ -238,7 +242,6 @@ export default function OptionsApp() {
     updateConfig("targetLang", nextActiveProfile.targetLang);
     updateConfig("model", nextActiveProfile.model);
     updateConfig("domainPreference", nextActiveProfile.domainPreference);
-    updateConfig("engine", nextActiveProfile.engine);
   }, [activeProfileId, profiles, updateConfig, updateProfiles]);
 
   const handleTestConnection = useCallback(() => {
@@ -353,97 +356,87 @@ export default function OptionsApp() {
   };
 
   return (
-    <div className="options-layout">
+    <div className="grid h-screen grid-cols-[240px_minmax(0,1fr)] bg-(--bg-base) overflow-hidden relative">
       {/* Sidebar */}
-      <nav className="options-sidebar">
-        <div className="sidebar-brand">
-          <div className="sidebar-brand-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+      <nav className="flex flex-col py-5 overflow-y-auto z-10 bg-white/50 dark:bg-[#111113]/60 backdrop-blur-xl border-r border-(--border-light)">
+        <div className="flex items-center gap-2.5 px-5 pb-5 mb-1 border-b border-(--border-light)">
+          <div className="w-8 h-8 rounded-[8px] bg-(--accent-solid) flex items-center justify-center shrink-0">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
               <path
                 d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"
                 stroke="white"
-                strokeWidth="2"
+                strokeWidth="2.2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
               <path
                 d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"
                 stroke="white"
-                strokeWidth="2"
+                strokeWidth="2.2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
             </svg>
           </div>
           <div>
-            <div className="sidebar-brand-name gradient-text">EchoRead</div>
-            <div
-              style={{
-                fontSize: "11px",
-                color: "var(--text-tertiary)",
-                fontWeight: "500",
-              }}
-            >
+            <div className="text-[15px] font-semibold text-(--text-primary) tracking-tight">
+              EchoRead
+            </div>
+            <div className="text-[11px] text-(--text-tertiary) font-medium -mt-px">
               设置
             </div>
           </div>
         </div>
 
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            className={`sidebar-item ${activeTab === tab.id ? "active" : ""}`}
-            onClick={() => setActiveTab(tab.id)}
-          >
-            <span className="sidebar-item-icon">
-              <tab.icon />
-            </span>
-            {tab.label}
-          </button>
-        ))}
-
-        <div className="sidebar-divider" />
+        <div className="flex flex-col gap-0.5 px-3 mt-2">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              className={`flex items-center gap-2.5 px-3 py-[7px] w-full border-none rounded-lg cursor-pointer transition-all duration-150 ease-out text-[13px] font-medium text-left font-sans tracking-tight ${
+                activeTab === tab.id
+                  ? "bg-(--bg-surface-hover) text-(--text-primary) font-semibold"
+                  : "bg-transparent text-(--text-secondary) hover:bg-(--bg-surface) hover:text-(--text-primary)"
+              } active:scale-[0.98]`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              <span
+                className={`flex items-center justify-center shrink-0 w-4 h-4 transition-opacity duration-150 ${
+                  activeTab === tab.id ? "opacity-100" : "opacity-50"
+                }`}
+              >
+                <tab.icon />
+              </span>
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
 
         {/* Save Indicator */}
         <div
-          style={{
-            marginTop: "auto",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "6px",
-            padding: "10px",
-            fontSize: "13px",
-            color: saved ? "var(--success)" : "var(--text-tertiary)",
-            transition: "all 0.3s ease",
-            pointerEvents: "none",
-          }}
+          className={`mt-auto flex items-center justify-center gap-1.5 px-4 py-3 text-[11px] transition-colors duration-300 pointer-events-none border-t border-(--border-light) ${saved ? "text-(--success)" : "text-(--text-hint)"}`}
         >
           {saving ? (
             <>
-              <div
-                className="loading-spinner"
-                style={{
-                  width: "14px",
-                  height: "14px",
-                  borderWidth: "2px",
-                  borderTopColor: "currentColor",
-                }}
-              />{" "}
-              正在保存...
+              <div className="w-3 h-3 border-[1.5px] border-current/20 border-t-current rounded-full animate-[spin_0.8s_linear_infinite]" />
+              <span>保存中</span>
             </>
           ) : saved ? (
             <>
-              <IconCheck /> 已自动保存
+              <IconCheck />
+              <span>已保存</span>
             </>
           ) : (
-            "设置已实时同步"
+            <span>自动同步</span>
           )}
         </div>
       </nav>
 
       {/* Main Content */}
-      <main className="options-main">{renderContent()}</main>
+      <main className="flex justify-center p-10 overflow-y-auto h-screen z-1 relative">
+        <div key={activeTab} className="w-full max-w-[860px] animate-in">
+          {renderContent()}
+        </div>
+      </main>
     </div>
   );
 }
