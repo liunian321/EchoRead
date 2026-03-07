@@ -51,19 +51,51 @@ export async function retryWithBackoff<T>(
 export async function runAllSettledWithConcurrency<T>(
   tasks: Array<() => Promise<T>>,
   concurrency: number,
+  options?: {
+    signal?: AbortSignal;
+    abortOnFirstReject?: boolean;
+  },
 ): Promise<SettledResult<T>[]> {
   const results: SettledResult<T>[] = [];
   let nextIndex = 0;
   let active = 0;
+  let aborted = false;
+  const signal = options?.signal;
+  const abortOnFirstReject = options?.abortOnFirstReject ?? false;
+  // Track whether any task has succeeded yet — only abort-on-first-reject
+  // when zero tasks have succeeded so far (i.e. the very first request failed).
+  let hasAnySuccess = false;
 
   return new Promise((resolve) => {
-    const schedule = () => {
-      if (nextIndex >= tasks.length && active === 0) {
+    const finish = () => {
+      aborted = true;
+      resolve(results);
+    };
+
+    // Listen for external abort signal
+    if (signal) {
+      if (signal.aborted) {
         resolve(results);
         return;
       }
+      signal.addEventListener(
+        "abort",
+        () => {
+          if (!aborted) finish();
+        },
+        { once: true },
+      );
+    }
 
-      while (active < concurrency && nextIndex < tasks.length) {
+    const schedule = () => {
+      if (aborted) return;
+
+      if (nextIndex >= tasks.length && active === 0) {
+        if (!aborted) finish();
+        return;
+      }
+
+      while (!aborted && active < concurrency && nextIndex < tasks.length) {
         const currentIndex = nextIndex;
         nextIndex += 1;
         active += 1;
@@ -71,14 +103,29 @@ export async function runAllSettledWithConcurrency<T>(
         tasks[currentIndex]()
           .then((value) => {
             results[currentIndex] = { status: "fulfilled", value };
+            hasAnySuccess = true;
           })
           .catch((reason) => {
             results[currentIndex] = { status: "rejected", reason };
+            // If no task has ever succeeded and this is a rejection,
+            // abort all remaining tasks (the API is likely misconfigured).
+            if (abortOnFirstReject && !hasAnySuccess) {
+              console.warn(
+                "EchoRead: first translation request failed, skipping remaining tasks",
+                reason,
+              );
+              aborted = true;
+            }
           })
           .finally(() => {
             active -= 1;
             schedule();
           });
+      }
+
+      // After setting aborted=true in catch, drain remaining active tasks
+      if (aborted && active === 0) {
+        finish();
       }
     };
 

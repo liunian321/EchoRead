@@ -47,7 +47,6 @@ const IGNORE_TAGS = new Set([
   "textarea",
   "select",
   "option",
-  "time",
 ]);
 
 // 内联标签：跳过，继续向上查找段落根
@@ -95,6 +94,9 @@ const PARAGRAPH_TAGS = new Set([
   "dd",
   "caption",
 ]);
+
+// 语义段落标签的 CSS 选择器（预计算避免重复构建）
+const PARAGRAPH_SELECTOR = Array.from(PARAGRAPH_TAGS).join(",");
 
 // 跳过的容器标签 — 这些是导航/工具栏/页脚区域，不含正文内容
 const SKIP_TAGS = new Set(["nav", "header", "footer", "aside", "menu"]);
@@ -274,12 +276,26 @@ function isTranslatableBlock(el: HTMLElement): boolean {
   // 跳过紧邻图标的短文本（"Share" 旁边有分享图标）
   if (text.length < 30 && hasAdjacentIcon(el)) return false;
 
-  // ── 文本质量检测 ──
+  // ── 文本质量检测（单次遍历统计字符类型） ──
 
   const wordCount = text.split(/\s+/).filter((w) => w.length > 1).length;
-  const cjkCount = (
-    text.match(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/g) || []
-  ).length;
+  let cjkCount = 0,
+    alphaCount = 0,
+    kanaCount = 0,
+    hangulCount = 0;
+  for (const ch of text) {
+    const code = ch.codePointAt(0)!;
+    if (code >= 0x4e00 && code <= 0x9fff) cjkCount++;
+    else if (code >= 0x3040 && code <= 0x30ff) {
+      cjkCount++;
+      kanaCount++;
+    } else if (code >= 0xac00 && code <= 0xd7af) {
+      cjkCount++;
+      hangulCount++;
+    } else if ((code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a))
+      alphaCount++;
+  }
+  const alphaOrCjk = alphaCount + cjkCount;
 
   // 至少 3 个单词或 4 个 CJK 字符
   if (wordCount < 3 && cjkCount < 4) return false;
@@ -294,13 +310,17 @@ function isTranslatableBlock(el: HTMLElement): boolean {
   if (strippedNumbers.length < 6) return false;
 
   // 文字占比太低
-  const alphaOrCjk = (
-    text.match(/[a-zA-Z\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]/g) || []
-  ).length;
   if (text.length > 5 && alphaOrCjk / text.length < 0.3) return false;
 
-  // 跳过已经是目标语言的文本（CJK 占比 > 70%）
-  if (cjkCount > 0 && cjkCount / text.length > 0.7) return false;
+  // 跳过已经是目标语言（中文）的文本（CJK 占比 > 70%）
+  // 但如果含有日文假名（平假名/片假名）或韩文谚文，说明不是中文，不应跳过
+  if (
+    kanaCount === 0 &&
+    hangulCount === 0 &&
+    cjkCount > 0 &&
+    cjkCount / text.length > 0.7
+  )
+    return false;
 
   return true;
 }
@@ -360,7 +380,6 @@ function hasProcessedAncestor(el: HTMLElement): boolean {
  */
 function collectTranslatableBlocks(rootNode: Node, viewportOnly: boolean) {
   const blocks = new Set<HTMLElement>();
-  const containerSelector = Array.from(PARAGRAPH_TAGS).join(",");
   const rootElement =
     rootNode.nodeType === Node.ELEMENT_NODE
       ? (rootNode as HTMLElement)
@@ -370,7 +389,7 @@ function collectTranslatableBlocks(rootNode: Node, viewportOnly: boolean) {
   const contentZones = findContentZones(rootElement);
 
   // Phase 1: 在内容区域内扫描语义标签
-  const candidates = rootElement.querySelectorAll(containerSelector);
+  const candidates = rootElement.querySelectorAll(PARAGRAPH_SELECTOR);
   for (const el of Array.from(candidates) as HTMLElement[]) {
     if (el.hasAttribute(PROCESSED_ATTR)) continue;
     if (hasProcessedAncestor(el)) continue;
@@ -410,11 +429,10 @@ function collectTranslatableBlocks(rootNode: Node, viewportOnly: boolean) {
   }
 
   // Phase 3: 去重
-  const blockSet = new Set(blocks);
   const deduped = Array.from(blocks).filter((el) => {
     let ancestor = el.parentElement;
     while (ancestor && ancestor !== document.body) {
-      if (blockSet.has(ancestor)) return false;
+      if (blocks.has(ancestor)) return false;
       ancestor = ancestor.parentElement;
     }
     return true;
@@ -427,15 +445,12 @@ function collectTranslatableBlocks(rootNode: Node, viewportOnly: boolean) {
 
 // ── Inline Spinner（内联在原文旁边） ──
 
-let spinnerKeyframesReady = false;
-
 function ensureSpinnerKeyframes() {
-  if (spinnerKeyframesReady) return;
+  if (document.getElementById("echo-read-spinner-kf")) return;
   const style = document.createElement("style");
   style.id = "echo-read-spinner-kf";
   style.textContent = `@keyframes echoReadInlineSpin { to { transform: rotate(360deg); } }`;
   document.head.appendChild(style);
-  spinnerKeyframesReady = true;
 }
 
 function createInlineSpinner(anchor: HTMLElement): HTMLSpanElement {
@@ -721,18 +736,19 @@ function createTranslationRow(anchor: HTMLElement): TranslationRow {
 async function translateBlock(
   element: HTMLElement,
   settings: PageSettings,
-): Promise<void> {
+): Promise<boolean> {
   const blockId = String(nextBlockId++);
   element.setAttribute(PROCESSED_ATTR, blockId);
 
   // 用 textContent 代替 innerText 避免触发布局重排
   const text = (element.textContent || "").trim();
-  if (text.length < MIN_TEXT_LENGTH) return;
+  if (text.length < MIN_TEXT_LENGTH) return true; // skip counts as success
 
   // Phase 1: 内联 spinner 显示在原文旁边
   const inlineSpinner = createInlineSpinner(element);
   let translationRow: TranslationRow | null = null;
   let latestTranslation = "";
+  let success = true;
 
   /** 延迟创建翻译行：首次收到翻译文本时才创建 */
   const ensureRow = (): TranslationRow => {
@@ -764,7 +780,9 @@ async function translateBlock(
       const row = ensureRow();
       row.setText(latestTranslation || "（无翻译结果）");
       row.setCompleted();
+      success = true;
     } catch (error) {
+      success = false;
       // 确保 spinner 被移除
       inlineSpinner.remove();
       const raw = error instanceof Error ? error.message : String(error);
@@ -786,9 +804,74 @@ async function translateBlock(
   };
 
   await runTranslation();
+  return success;
+}
+
+// ── Error Notification ──
+
+function showTranslationError(message: string) {
+  document.getElementById("echo-read-error-toast")?.remove();
+  const host = document.createElement("div");
+  host.id = "echo-read-error-toast";
+  Object.assign(host.style, {
+    position: "fixed",
+    top: "20px",
+    left: "50%",
+    transform: "translateX(-50%) translateY(-10px)",
+    zIndex: "2147483647",
+    padding: "12px 24px",
+    borderRadius: "12px",
+    background: "rgba(30, 30, 32, 0.92)",
+    backdropFilter: "blur(20px) saturate(180%)",
+    WebkitBackdropFilter: "blur(20px) saturate(180%)",
+    color: "#ff453a",
+    fontSize: "14px",
+    fontWeight: "500",
+    fontFamily:
+      "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    boxShadow:
+      "0 8px 32px rgba(0, 0, 0, 0.3), inset 0 0 0 0.5px rgba(255, 255, 255, 0.08)",
+    opacity: "0",
+    transition:
+      "opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
+    pointerEvents: "none",
+    lineHeight: "1.4",
+    maxWidth: "480px",
+    textAlign: "center",
+  });
+  host.textContent = message;
+  document.body.appendChild(host);
+
+  // Animate in
+  requestAnimationFrame(() => {
+    host.style.opacity = "1";
+    host.style.transform = "translateX(-50%) translateY(0)";
+  });
+
+  // Auto-dismiss after 4 seconds
+  setTimeout(() => {
+    host.style.opacity = "0";
+    host.style.transform = "translateX(-50%) translateY(-10px)";
+    setTimeout(() => host.remove(), 350);
+  }, 4000);
 }
 
 // ── Public API ──
+
+// Module-level AbortController for cancellation support
+let currentAbortController: AbortController | null = null;
+
+/**
+ * Cancel any in-progress full-page translation.
+ * Safe to call even when no translation is running.
+ */
+export function cancelPageTranslation(): void {
+  if (currentAbortController) {
+    currentAbortController.abort();
+    currentAbortController = null;
+    console.info("EchoRead: full page translation cancelled by user");
+  }
+}
 
 export async function translatePageContent(
   batchSizeOrOptions: number | TranslateOptions = 10,
@@ -805,10 +888,26 @@ export async function translatePageContent(
   const settings = await loadPageSettings();
   if (isDomainBlocked(location.hostname, settings.domainBlacklist)) return;
 
+  // Cancel any previous in-flight translation
+  if (currentAbortController) {
+    currentAbortController.abort();
+  }
+  const abortController = new AbortController();
+  currentAbortController = abortController;
+
   const targets = collectTranslatableBlocks(
     options.rootNode || document.body,
     options.viewportOnly !== false,
   ).slice(0, options.batchSize || 10);
+
+  if (targets.length === 0) {
+    console.info("EchoRead: no translatable blocks found on this page");
+    showTranslationError(
+      "未找到可翻译的内容（页面可能已是目标语言，或内容太少）",
+    );
+    currentAbortController = null;
+    return;
+  }
 
   const concurrency = options.concurrency || settings.concurrency;
   const timeoutMs = options.timeoutMs || settings.timeoutMs;
@@ -817,10 +916,45 @@ export async function translatePageContent(
   console.info(
     `EchoRead: translating ${targets.length} blocks (concurrency: ${concurrency})`,
   );
-  const tasks = targets.map((el) => () => translateBlock(el, mergedSettings));
-  try {
-    await runAllSettledWithConcurrency(tasks, mergedSettings.concurrency);
-  } finally {
+
+  const cleanup = () => {
     styleCache.clear();
+    if (currentAbortController === abortController) {
+      currentAbortController = null;
+    }
+  };
+
+  try {
+    // ── Probe: translate the first block with 0 retries to quickly detect API issues ──
+    const probeSettings = { ...mergedSettings, retryCount: 0 };
+    const probeSuccess = await translateBlock(targets[0], probeSettings);
+
+    if (!probeSuccess) {
+      // First request failed — API is likely misconfigured or unavailable.
+      // Stop immediately and notify the user.
+      console.warn(
+        "EchoRead: probe translation failed, skipping remaining blocks",
+      );
+      showTranslationError(
+        "⚠ 翻译服务连接失败，已跳过后续翻译。请检查 API 配置。",
+      );
+      return;
+    }
+
+    // Check if cancelled during probe
+    if (abortController.signal.aborted) return;
+
+    // ── Translate remaining blocks with full concurrency + retries ──
+    const remaining = targets.slice(1);
+    if (remaining.length > 0) {
+      const tasks = remaining.map(
+        (el) => () => translateBlock(el, mergedSettings),
+      );
+      await runAllSettledWithConcurrency(tasks, mergedSettings.concurrency, {
+        signal: abortController.signal,
+      });
+    }
+  } finally {
+    cleanup();
   }
 }

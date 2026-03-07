@@ -3,7 +3,10 @@ import { useSelection } from "./hooks/useSelection";
 import { useTranslate } from "./hooks/useTranslate";
 import { useShortcut } from "./hooks/useShortcut";
 import { useDragging } from "./hooks/useDragging";
-import { translatePageContent } from "./utils/fullPageTranslate";
+import {
+  translatePageContent,
+  cancelPageTranslation,
+} from "./utils/fullPageTranslate";
 import { Bubble } from "./components/Bubble";
 import { Skeleton } from "./components/Skeleton";
 import { TranslationResult } from "./components/TranslationResult";
@@ -96,7 +99,13 @@ export function App() {
   };
 
   const handleFullPageTranslate = async () => {
-    if (isFullPageTranslatingRef.current) return;
+    // If already translating, cancel it
+    if (isFullPageTranslatingRef.current) {
+      cancelPageTranslation();
+      setIsFullPageTranslating(false);
+      isFullPageTranslatingRef.current = false;
+      return;
+    }
     setIsFullPageTranslating(true);
     isFullPageTranslatingRef.current = true;
     try {
@@ -274,7 +283,9 @@ export function App() {
               "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease",
             transform: isFullPageTranslating ? "scale(1.05)" : "scale(1)",
           }}
-          title="拖拽移动，点击翻译整页"
+          title={
+            isFullPageTranslating ? "点击取消翻译" : "拖拽移动，点击翻译整页"
+          }
         >
           {isFullPageTranslating ? (
             <div
